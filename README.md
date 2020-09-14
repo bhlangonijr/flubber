@@ -11,7 +11,7 @@ Flubber is a simple kotlin/java library for building workflow and automation tas
 
 ```
 $ git clone git@github.com:bhlangonijr/flubber.git
-$ cd chesslib/
+$ cd flubber/
 $ mvn clean compile package install
 ```
 
