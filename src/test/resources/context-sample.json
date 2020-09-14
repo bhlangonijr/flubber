@@ -1,0 +1,71 @@
+{
+  "script": {
+    "@id": "sample",
+    "author": {
+      "name": "Ben-Hur",
+      "e-mail": "bhlangonijr@gmail.com"
+    },
+    "_comment": "sample script of a call flow scenario",
+    "flow": [
+      {
+        "@id": "main",
+        "sequence": [
+          {
+            "action": "answer",
+            "args": {
+              "@id": "initial.answer",
+              "_comment": "call aliasing for referencing the call"
+            }
+          },
+          {
+            "action": "say",
+            "args": {
+              "text": "hello {{session.user}}, press 1000 to greet or 2000 to quit."
+            },
+            "async": true
+          }
+        ]
+      },
+      {
+        "@id": "exit",
+        "sequence": [
+          {
+            "action": "say",
+            "args": {
+              "text": "exited {{session.user}}"
+            }
+          }
+        ]
+      }
+    ],
+    "hooks": [
+      {
+        "hangup": {
+          "do": {
+            "sequence": "exit",
+            "args": {
+              "HANGUP_CODE": "{event.code}"
+            }
+          }
+        }
+      }
+    ],
+    "exceptionally": {
+      "do": {
+        "sequence": "exit",
+        "args": {
+          "ERROR": "{exception.msg}"
+        }
+      }
+    }
+  },
+  "state": "NEW",
+  "global": {
+    "args": {
+      "session": {
+        "user": "ben-hur"
+      }
+    }
+  },
+  "stack": []
+}
