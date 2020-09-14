@@ -17,7 +17,7 @@ $ mvn clean compile package install
 
 ## From repo
 
-Chesslib dependency can be added via the jitpack repository.
+Flubber dependency can be added via the jitpack repository.
 
 ## Maven
 
