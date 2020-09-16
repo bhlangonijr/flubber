@@ -2,6 +2,8 @@ package com.github.bhlangonijr.flubber.action
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.github.bhlangonijr.flubber.script.Script
+import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -26,5 +28,21 @@ class JavascriptActionTest {
 
         assertTrue(context.has("action"))
         assertEquals("Hello world", result)
+    }
+
+    @Test
+    fun `test return json`() {
+
+        val script = """
+            var action = function(context, args) {
+                var result = {"exit": true}
+                return result;
+            }
+        """
+        val context = mapper.readTree("{}")
+        val result = JavascriptAction(script)
+            .execute(context, mutableMapOf(Pair("arg1", "world")))
+
+        assertTrue(objectToNode(result!!).get(Script.EXIT_NODE_FIELD_NAME)?.asBoolean() == true)
     }
 }

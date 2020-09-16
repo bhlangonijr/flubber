@@ -68,6 +68,9 @@
           "args": {
             "reference": "initial.answer"
           }
+        },
+        {
+          "action": "exit"
         }
       ]
     },
@@ -85,6 +88,9 @@
           "args": {
             "reference": "initial.answer"
           }
+        },
+        {
+          "action": "exit"
         }
       ]
     },

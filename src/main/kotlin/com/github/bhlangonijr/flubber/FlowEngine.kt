@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.Event.Companion.EVENT_NAME_FIELD
 import com.github.bhlangonijr.flubber.action.Action
 import com.github.bhlangonijr.flubber.action.Actions
+import com.github.bhlangonijr.flubber.action.ExitAction
 import com.github.bhlangonijr.flubber.action.ExpressionAction
 import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.Context.Companion.ARGS_FIELD
@@ -19,10 +20,11 @@ import com.github.bhlangonijr.flubber.script.Script.Companion.DO_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ELSE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.RELOAD_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SEQUENCE_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.EXIT_NODE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.URL_FIELD_NAME
+import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import com.github.bhlangonijr.flubber.util.Util.Companion.bindVars
 import com.github.bhlangonijr.flubber.util.Util.Companion.jsonException
-import com.github.bhlangonijr.flubber.util.Util.Companion.mapToNode
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import mu.KotlinLogging
 
@@ -33,6 +35,7 @@ class FlowEngine {
 
     init {
         register("expression", ExpressionAction())
+        register("exit", ExitAction())
     }
 
     fun run(context: () -> Context): Context = run(context.invoke())
@@ -72,15 +75,13 @@ class FlowEngine {
         while (context.running) {
             runCatching {
                 context.next()?.let { frame ->
-                    val node = frame.node
-                    val args = nodeToMap(node["args"] ?: EMPTY_OBJECT)
+                    val action = frame.node
+                    val args = nodeToMap(action["args"] ?: EMPTY_OBJECT)
                     val globalArgs = context.globalArgs
                     bindVars(args, globalArgs)
-                    val result = executeAction(node, args, globalArgs)
+                    val result = executeAction(action, args, globalArgs)
                     context.push(StackFrame.create(frame.sequenceId, frame.actionIndex, args, result))
-                    if (result is Boolean) {
-                        executeDoElse(node, result, context)
-                    }
+                    processResult(action, result, context)
                     logger.trace { "stack: ${context.stack.toPrettyString()}" }
                 }
             }.onFailure { exception ->
@@ -116,6 +117,19 @@ class FlowEngine {
         }
     }
 
+    private fun processResult(action: JsonNode, result: Any?, context: Context) {
+
+        if (result is Boolean) {
+            executeDoElse(action, result, context)
+        } else if (result is Map<*, *>) {
+            val resultNode = objectToNode(result)
+            if (resultNode.get(EXIT_NODE_FIELD_NAME)?.asBoolean() == true) {
+                context.state = ExecutionState.FINISHED
+            }
+        }
+
+    }
+
     private fun executeDoElse(action: JsonNode, result: Boolean, context: Context, blockArgs: JsonNode? = null) {
 
         when {
@@ -127,7 +141,7 @@ class FlowEngine {
             val sequence = block.get(SEQUENCE_FIELD_NAME)?.asText()
             val args = nodeToMap(block.get(ARGS_FIELD) ?: EMPTY_OBJECT)
             blockArgs?.let { bindVars(args, it) }
-            context.globalArgs.setAll<ObjectNode>(mapToNode(args) as ObjectNode)
+            context.globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
             sequence?.let { context.push(StackFrame.create(it, -1)) }
         }
     }

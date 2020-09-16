@@ -18,8 +18,7 @@ class Util {
         fun nodeToMap(node: JsonNode): MutableMap<String, Any?> =
             mapper.convertValue(node, object : TypeReference<MutableMap<String, Any?>>() {})
 
-        fun mapToNode(map: MutableMap<String, Any?>): JsonNode = mapper.valueToTree(map)
-
+        fun objectToNode(obj: Any): JsonNode = mapper.valueToTree(obj)
 
         fun bindVars(args: MutableMap<String, Any?>, globalArgs: JsonNode) {
 

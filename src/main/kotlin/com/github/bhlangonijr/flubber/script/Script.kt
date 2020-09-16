@@ -28,6 +28,7 @@ class Script private constructor(val root: JsonNode) {
         const val IMPORT_FIELD_NAME = "import"
         const val URL_FIELD_NAME = "url"
         const val RELOAD_FIELD_NAME = "reload"
+        const val EXIT_NODE_FIELD_NAME = "exit"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 

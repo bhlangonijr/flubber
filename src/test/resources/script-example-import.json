@@ -6,16 +6,16 @@
   },
   "import": [
     {
-      "action":"answer",
-      "url":  "https://raw.githubusercontent.com/bhlangonijr/flubber/master/src/test/resources/actions/answer.js"
+      "action": "answer",
+      "url": "https://raw.githubusercontent.com/bhlangonijr/flubber/master/src/test/resources/actions/answer.js"
     },
     {
-      "action":"hangup",
-      "url":  "https://raw.githubusercontent.com/bhlangonijr/flubber/master/src/test/resources/actions/hangup.js"
+      "action": "hangup",
+      "url": "https://raw.githubusercontent.com/bhlangonijr/flubber/master/src/test/resources/actions/hangup.js"
     },
     {
-      "action":"say",
-      "url":  "https://raw.githubusercontent.com/bhlangonijr/flubber/master/src/test/resources/actions/say.py"
+      "action": "say",
+      "url": "https://raw.githubusercontent.com/bhlangonijr/flubber/master/src/test/resources/actions/say.py"
     }
   ],
   "_comment": "sample script of a call flow scenario",

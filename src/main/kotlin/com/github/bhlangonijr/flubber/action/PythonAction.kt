@@ -8,7 +8,7 @@ class PythonAction constructor(private val script: String) : Action {
 
     private val engine = ScriptEngineManager().getEngineByName("python")
 
-    override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+    override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
 
         engine.eval(script)
         val invocable = engine as Invocable
