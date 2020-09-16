@@ -25,6 +25,9 @@ class Script private constructor(val root: JsonNode) {
         const val MAIN_FLOW_ID = "main"
         const val DO_FIELD_NAME = "do"
         const val ELSE_FIELD_NAME = "else"
+        const val IMPORT_FIELD_NAME = "import"
+        const val URL_FIELD_NAME = "url"
+        const val RELOAD_FIELD_NAME = "reload"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -59,6 +62,8 @@ class Script private constructor(val root: JsonNode) {
     fun main(): ArrayNode? = sequence(MAIN_FLOW_ID)
 
     fun flow(): ArrayNode? = (root[FLOW_FIELD_NAME] as ArrayNode?)
+
+    fun import(): ArrayNode? = (root[IMPORT_FIELD_NAME] as ArrayNode?)
 
     fun sequence(id: String): ArrayNode? =
         flow()

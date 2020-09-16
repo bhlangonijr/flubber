@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.Event.Companion.EVENT_NAME_FIELD
 import com.github.bhlangonijr.flubber.action.Action
+import com.github.bhlangonijr.flubber.action.Actions
+import com.github.bhlangonijr.flubber.action.ExpressionAction
 import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.Context.Companion.ARGS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.EMPTY_OBJECT
@@ -15,7 +17,9 @@ import com.github.bhlangonijr.flubber.script.Script.Companion.ACTION_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.DECISION_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.DO_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ELSE_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.RELOAD_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SEQUENCE_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.URL_FIELD_NAME
 import com.github.bhlangonijr.flubber.util.Util.Companion.bindVars
 import com.github.bhlangonijr.flubber.util.Util.Companion.jsonException
 import com.github.bhlangonijr.flubber.util.Util.Companion.mapToNode
@@ -27,11 +31,16 @@ class FlowEngine {
     private val logger = KotlinLogging.logger {}
     private val actionMap = mutableMapOf<String, Action>()
 
+    init {
+        register("expression", ExpressionAction())
+    }
+
     fun run(context: () -> Context): Context = run(context.invoke())
 
     fun run(context: Context): Context {
 
         logger.debug { "Executing script ${context.script.name}" }
+        loadImports(context)
         execute(context)
         return context
     }
@@ -55,6 +64,7 @@ class FlowEngine {
     }
 
     fun register(name: String, action: () -> Action) = register(name, action.invoke())
+
 
     private fun execute(context: Context) {
 
@@ -122,4 +132,20 @@ class FlowEngine {
         }
     }
 
+    private fun loadImports(context: Context) {
+
+        context.script
+            .import()
+            ?.filter { it.hasNonNull(ACTION_FIELD_NAME) }
+            ?.filter { it.hasNonNull(URL_FIELD_NAME) }
+            ?.forEach { node ->
+                val action = node.get(ACTION_FIELD_NAME).asText()
+                val url = node.get(URL_FIELD_NAME).asText()
+                val reload = node.get(RELOAD_FIELD_NAME)?.asBoolean() ?: false
+                if (reload || actionMap.contains(action).not()) {
+                    logger.debug { "fetching action [$action] from [$url]" }
+                    register(action, Actions.from(url))
+                }
+            }
+    }
 }

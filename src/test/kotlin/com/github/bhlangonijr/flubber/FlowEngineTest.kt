@@ -3,7 +3,6 @@ package com.github.bhlangonijr.flubber
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.action.Action
-import com.github.bhlangonijr.flubber.action.ExpressionAction
 import com.github.bhlangonijr.flubber.action.JavascriptAction
 import com.github.bhlangonijr.flubber.action.PythonAction
 import com.github.bhlangonijr.flubber.script.Script
@@ -46,7 +45,6 @@ class FlowEngineTest {
                 }
             }
         }
-        engine.register("expression", ExpressionAction())
         engine.register("waitOnDigits") {
             object : Action {
                 override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
@@ -96,6 +94,6 @@ class FlowEngineTest {
         assertThrows<ScriptException> {
             engine.run { script.with(args) }
         }
-
     }
+
 }
