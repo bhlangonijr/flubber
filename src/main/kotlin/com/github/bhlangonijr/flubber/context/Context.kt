@@ -88,7 +88,7 @@ class Context private constructor(
                 pop()?.let { frame ->
                     val nextActionIndex = frame.actionIndex + 1
                     val sequence = script.sequence(frame.sequence)
-                        ?: throw SequenceNotFoundException("Sequence [$frame.sequence] not found")
+                        ?: throw SequenceNotFoundException("Sequence [${frame.sequence}] not found")
                     when {
                         nextActionIndex < sequence.size() ->
                             script.action(frame.sequence, nextActionIndex)

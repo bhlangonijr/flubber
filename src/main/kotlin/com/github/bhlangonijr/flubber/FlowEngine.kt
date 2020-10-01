@@ -50,7 +50,7 @@ class FlowEngine {
 
     fun hook(context: Context, event: Event): Context {
 
-        logger.debug { "Callback script ${event.name}" }
+        logger.debug { "Script hook ${event.name}" }
         context.script.hooks()
             ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
             ?.let { hooks ->
@@ -100,6 +100,18 @@ class FlowEngine {
 
     }
 
+    private fun processResult(action: JsonNode, result: Any?, context: Context) {
+
+        if (result is Boolean) {
+            executeDoElse(action, result, context)
+        } else if (result is Map<*, *>) {
+            val resultNode = objectToNode(result)
+            if (resultNode.get(EXIT_NODE_FIELD_NAME)?.asBoolean() == true) {
+                context.state = ExecutionState.FINISHED
+            }
+        }
+    }
+
     private fun executeAction(action: JsonNode, args: MutableMap<String, Any?>, globalArgs: ObjectNode): Any? {
 
         val actionName = when {
@@ -115,19 +127,6 @@ class FlowEngine {
             logger.debug { "Called [$actionName] with args [$args] and result: [$result] " }
             result
         }
-    }
-
-    private fun processResult(action: JsonNode, result: Any?, context: Context) {
-
-        if (result is Boolean) {
-            executeDoElse(action, result, context)
-        } else if (result is Map<*, *>) {
-            val resultNode = objectToNode(result)
-            if (resultNode.get(EXIT_NODE_FIELD_NAME)?.asBoolean() == true) {
-                context.state = ExecutionState.FINISHED
-            }
-        }
-
     }
 
     private fun executeDoElse(action: JsonNode, result: Boolean, context: Context, blockArgs: JsonNode? = null) {
