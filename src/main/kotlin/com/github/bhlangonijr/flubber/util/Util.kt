@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.github.bhlangonijr.flubber.context.Context.Companion.EXCEPTION_FIELD
+import kotlin.random.Random
 
 class Util {
 
@@ -52,5 +53,7 @@ class Util {
             node.set<ObjectNode>(EXCEPTION_FIELD, details)
             return node
         }
+
+        fun getId(prefix: String): String = "$prefix-${Random.nextInt(1000000, 9999999)}"
     }
 }

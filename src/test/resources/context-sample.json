@@ -59,7 +59,9 @@
       }
     }
   },
-  "state": "NEW",
+  "state": {
+    "mainThreadId": "NEW"
+  },
   "global": {
     "args": {
       "session": {
@@ -67,5 +69,7 @@
       }
     }
   },
-  "stack": []
+  "stack": {
+    "mainThreadId": []
+  }
 }

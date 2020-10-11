@@ -7,6 +7,8 @@ import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.util.Util.Companion.loadResource
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 
 class FlowEngineIntegrationTest {
 
@@ -24,8 +26,9 @@ class FlowEngineIntegrationTest {
     fun `test imported actions`() {
 
         val engine = FlowEngine()
+        val queue = ArrayBlockingQueue<Boolean>(2)
 
-        engine.register("waitOnDigits") {
+        scriptWithImports.register("waitOnDigits") {
             object : Action {
                 override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
                     val input = "1000"
@@ -36,8 +39,9 @@ class FlowEngineIntegrationTest {
             }
         }
 
-        val ctx = engine.run { scriptWithImports.with(args) }
-        assertTrue(ctx.globalArgs.get("COMPLETED").asBoolean())
+        val ctx = scriptWithImports.with(args)
+        engine.run { ctx }.onComplete { queue.offer(ctx.globalArgs.get("COMPLETED").asBoolean()) }
+        assertTrue(queue.poll(5, TimeUnit.SECONDS) == true)
     }
 
 }

@@ -16,20 +16,22 @@ import java.util.*
 class Context private constructor(
     private val data: ObjectNode,
     val script: Script
-) {
+) : ContextExecutionListener() {
 
     companion object {
 
+        const val CONTEXT_ID_FIELD = "contextId"
         const val GLOBAL_FIELD = "global"
         const val SCRIPT_FIELD = "script"
         const val STACK_FIELD = "stack"
-        const val ARGS_FIELD = "args"
+        const val GLOBAL_ARGS_FIELD = "args"
         const val RESULT_FIELD = "result"
         const val STATE_FIELD = "state"
         const val SEQUENCE_ID_FIELD = "sequenceId"
         const val ACTION_ID_FIELD = "actionId"
         const val EXCEPTION_FIELD = "exception"
         const val MAX_STACK_SIZE = 50
+        const val MAIN_THREAD_ID = "mainThreadId"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -50,42 +52,61 @@ class Context private constructor(
 
             val argsJson = mapper.readTree(args)
             val data = mapper.createObjectNode()
+            data.put(CONTEXT_ID_FIELD, UUID.randomUUID().toString())
             data.set<ObjectNode>(SCRIPT_FIELD, script.root)
-            data.put(STATE_FIELD, ExecutionState.NEW.name)
+            data.with(STATE_FIELD).put(MAIN_THREAD_ID, ExecutionState.NEW.name)
             data.with(GLOBAL_FIELD)
-                .set<ObjectNode>(ARGS_FIELD, argsJson)
+                .set<ObjectNode>(GLOBAL_ARGS_FIELD, argsJson)
             return Context(data, script)
         }
     }
 
-    val globalArgs: ObjectNode
-        get() = data.with(GLOBAL_FIELD).get(ARGS_FIELD) as ObjectNode
+    val id: String
+        get() = data.get(CONTEXT_ID_FIELD).asText()
 
-    var state: ExecutionState
-        get() = ExecutionState.valueOf(data[STATE_FIELD].asText())
-        set(value) {
-            data.put(STATE_FIELD, value.name)
-        }
+    val globalArgs: ObjectNode
+        get() = data.with(GLOBAL_FIELD).get(GLOBAL_ARGS_FIELD) as ObjectNode
+
+    val state: ObjectNode
+        get() = data.with(STATE_FIELD)
+
+    val stack: ObjectNode
+        get() = data.with(STACK_FIELD)
 
     val running: Boolean
-        get() = state == ExecutionState.NEW || state == ExecutionState.RUNNING
+        get() = state.fieldNames()
+            .asSequence()
+            .any { running(it) }
 
-    val stack: ArrayNode
-        get() = data.withArray(STACK_FIELD)
+    fun running(threadId: String): Boolean =
+        threadStateValue(threadId) == ExecutionState.RUNNING || threadStateValue(threadId) == ExecutionState.NEW
 
-    fun next(): FramePointer? =
-        when (state) {
+    fun threadStateValue(threadId: String): ExecutionState = ExecutionState.valueOf(state.get(threadId).asText())
+
+    fun setThreadState(threadId: String, executionState: ExecutionState) {
+
+        state.put(threadId, executionState.name)
+        invokeStateListeners(threadId, executionState)
+        if (threadId == MAIN_THREAD_ID && executionState == ExecutionState.FINISHED) {
+            invokeOnCompleteListeners()
+        }
+    }
+
+    fun threadStack(threadId: String): ArrayNode = stack.withArray(threadId)
+
+    fun next(threadId: String = MAIN_THREAD_ID): FramePointer? =
+        when (threadStateValue(threadId)) {
             ExecutionState.NEW -> {
                 val action = script.action(MAIN_FLOW_ID, 0)
                 if (action != null) {
-                    state = ExecutionState.RUNNING
+                    setThreadState(threadId, ExecutionState.RUNNING)
                     FramePointer(action, MAIN_FLOW_ID, 0)
                 } else {
                     throw SequenceNotFoundException("Sequence [$MAIN_FLOW_ID] not found")
                 }
             }
-            ExecutionState.RUNNING, ExecutionState.WAITING -> {
-                pop()?.let { frame ->
+            ExecutionState.RUNNING -> {
+                pop(threadId)?.let { frame ->
                     val nextActionIndex = frame.actionIndex + 1
                     val sequence = script.sequence(frame.sequence)
                         ?: throw SequenceNotFoundException("Sequence [${frame.sequence}] not found")
@@ -93,16 +114,15 @@ class Context private constructor(
                         nextActionIndex < sequence.size() ->
                             script.action(frame.sequence, nextActionIndex)
                                 ?.let { action -> FramePointer(action, frame.sequence, nextActionIndex) }
-                        stack.isEmpty.not() -> next()
+                        threadStack(threadId).isEmpty.not() -> next()
                         else -> {
-                            state = ExecutionState.FINISHED
+                            setThreadState(threadId, ExecutionState.FINISHED)
                             null
                         }
                     }
                 }
             }
             else -> {
-                state = ExecutionState.FINISHED
                 null
             }
         }
@@ -111,13 +131,16 @@ class Context private constructor(
 
     override fun toString(): String = data.toPrettyString()
 
-    fun push(frame: StackFrame): ArrayNode = stack.add(frame.data)
+    fun push(threadId: String, frame: StackFrame): ArrayNode = threadStack(threadId).add(frame.data)
 
-    fun pop(): StackFrame? =
-        if (stack.isEmpty.not()) StackFrame(stack.remove(stack.size() - 1) as ObjectNode) else null
+    fun pop(threadId: String): StackFrame? {
 
-    fun current(): StackFrame? =
-        if (stack.isEmpty.not()) StackFrame(stack.last() as ObjectNode) else null
+        val stack = threadStack(threadId)
+        return if (stack.isEmpty.not()) StackFrame(stack.remove(stack.size() - 1) as ObjectNode) else null
+    }
+
+    fun current(threadId: String): StackFrame? =
+        if (threadStack(threadId).isEmpty.not()) StackFrame(threadStack(threadId).last() as ObjectNode) else null
 
 }
 
@@ -153,9 +176,9 @@ data class StackFrame(val data: ObjectNode) {
         get() = data.get(Context.ACTION_ID_FIELD).asInt()
 
     var args: Map<String, Any?>
-        get() = nodeToMap(data.get(Context.ARGS_FIELD))
+        get() = nodeToMap(data.get(Context.GLOBAL_ARGS_FIELD))
         set(value) {
-            data.set<JsonNode>(Context.ARGS_FIELD, mapper.valueToTree(value))
+            data.set<JsonNode>(Context.GLOBAL_ARGS_FIELD, mapper.valueToTree(value))
         }
 
     var result: Any?

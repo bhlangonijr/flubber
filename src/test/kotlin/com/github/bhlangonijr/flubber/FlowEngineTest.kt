@@ -9,14 +9,13 @@ import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.script.ScriptException
 import com.github.bhlangonijr.flubber.util.Util.Companion.loadResource
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 
 class FlowEngineTest {
 
-    private val script = Script.from(loadResource("/script-example.json"))
     private val answerAction = loadResource("/actions/answer.js")
     private val hangupAction = loadResource("/actions/hangup.js")
     private val sayAction = loadResource("/actions/say.py")
@@ -35,9 +34,10 @@ class FlowEngineTest {
         val queue = ArrayBlockingQueue<String>(3)
         val engine = FlowEngine()
 
-        engine.register("answer", JavascriptAction(answerAction))
-        engine.register("hangup", JavascriptAction(hangupAction))
-        engine.register("say") {
+        val script = Script.from(loadResource("/script-example.json"))
+        script.register("answer", JavascriptAction(answerAction))
+        script.register("hangup", JavascriptAction(hangupAction))
+        script.register("say") {
             object : Action {
                 override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
                     queue.offer(args["text"] as String)
@@ -45,7 +45,7 @@ class FlowEngineTest {
                 }
             }
         }
-        engine.register("waitOnDigits") {
+        script.register("waitOnDigits") {
             object : Action {
                 override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
                     val input = "1000"
@@ -68,9 +68,10 @@ class FlowEngineTest {
         val queue = ArrayBlockingQueue<String>(2)
         val engine = FlowEngine()
 
-        engine.register("answer", JavascriptAction(answerAction))
-        engine.register("say", PythonAction(sayAction))
-        engine.register("hangup") {
+        val script = Script.from(loadResource("/script-example.json"))
+        script.register("answer", JavascriptAction(answerAction))
+        script.register("say", PythonAction(sayAction))
+        script.register("hangup") {
             object : Action {
                 override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
                     queue.offer(args["reference"] as String)
@@ -86,13 +87,17 @@ class FlowEngineTest {
     @Test
     fun `test missing registered action inside exception handling block`() {
 
+        val queue = ArrayBlockingQueue<Exception>(2)
         val engine = FlowEngine()
 
-        engine.register("answer", JavascriptAction(answerAction))
-        engine.register("say", PythonAction(sayAction))
+        val script = Script.from(loadResource("/script-example.json"))
+        script.register("answer", JavascriptAction(answerAction))
+        script.register("say", PythonAction(sayAction))
 
-        assertThrows<ScriptException> {
-            engine.run { script.with(args) }
+        engine.run { script.with(args) }.onException {
+            queue.offer(it as Exception)
         }
+
+        assertTrue(queue.poll(5, TimeUnit.SECONDS) is ScriptException)
     }
 }

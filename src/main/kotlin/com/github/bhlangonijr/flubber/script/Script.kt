@@ -4,14 +4,23 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.github.bhlangonijr.flubber.action.Action
+import com.github.bhlangonijr.flubber.action.Actions
+import com.github.bhlangonijr.flubber.action.ExitAction
+import com.github.bhlangonijr.flubber.action.ExpressionAction
 import com.github.bhlangonijr.flubber.context.Context
+import mu.KotlinLogging
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.URL
 import java.util.stream.Collectors
 
-class Script private constructor(val root: JsonNode) {
+class Script private constructor(
+    val root: JsonNode,
+    val actionMap: MutableMap<String, Action> = mutableMapOf()
+) {
+    private val logger = KotlinLogging.logger {}
 
     companion object {
 
@@ -29,6 +38,7 @@ class Script private constructor(val root: JsonNode) {
         const val URL_FIELD_NAME = "url"
         const val RELOAD_FIELD_NAME = "reload"
         const val EXIT_NODE_FIELD_NAME = "exit"
+        const val CALLBACK_NODE_FIELD_NAME = "callback"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -53,7 +63,11 @@ class Script private constructor(val root: JsonNode) {
 
         fun from(script: JsonNode): Script {
 
-            return Script(script)
+            val result = Script(script)
+            result.register("expression", ExpressionAction())
+            result.register("exit", ExitAction())
+            result.loadImports()
+            return result
         }
     }
 
@@ -84,4 +98,27 @@ class Script private constructor(val root: JsonNode) {
 
     fun with(args: String): Context = Context.create(this, args)
 
+    fun register(name: String, action: Action) {
+
+        actionMap[name] = action
+        logger.info { "Registered action: $name" }
+    }
+
+    fun register(name: String, action: () -> Action) = register(name, action.invoke())
+
+    private fun loadImports() {
+
+        this.import()
+            ?.filter { it.hasNonNull(ACTION_FIELD_NAME) }
+            ?.filter { it.hasNonNull(URL_FIELD_NAME) }
+            ?.forEach { node ->
+                val action = node.get(ACTION_FIELD_NAME).asText()
+                val url = node.get(URL_FIELD_NAME).asText()
+                val reload = node.get(RELOAD_FIELD_NAME)?.asBoolean() ?: false
+                if (reload || actionMap.contains(action).not()) {
+                    logger.debug { "fetching action [$action] from [$url]" }
+                    register(action, Actions.from(url))
+                }
+            }
+    }
 }
