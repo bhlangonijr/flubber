@@ -59,7 +59,7 @@ dependencies {
 # Usage
 
 The building blocks of any scripts are the actions. Currently actions written in Javascript and Python are supported 
-as long the expected contract is honoured - a simple function having arguments `context` and `args`. These actions can 
+as long as the expected interface is implemented - a simple function having arguments `context` and `args`. These actions can 
 be served by any web server as dynamic/static content or as local files: Ex.:
 
 ```javascript
