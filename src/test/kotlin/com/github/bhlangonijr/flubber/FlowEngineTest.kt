@@ -179,8 +179,7 @@ class FlowEngineTest {
                 }
             }
         }
-        script.register(
-            "waitOnDigits", JavascriptAction(
+        script.register("waitOnDigits", JavascriptAction(
                 """
         var action = function(context, args) {
             var result = {

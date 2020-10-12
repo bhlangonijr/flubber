@@ -35,7 +35,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
   <groupId>com.github.bhlangonijr</groupId>
   <artifactId>flubber</artifactId>
-  <version>0.1.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
@@ -51,44 +51,91 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.1.0'
+    implementation 'com.github.bhlangonijr:flubber:0.3.0'
     ...
 }
 ```
 
 # Usage
 
-## Run a json script
+The building blocks of any scripts are the actions. Currently actions written in Javascript and Python are supported 
+as long the expected contract is honoured - a simple function having arguments `context` and `args`. These actions can 
+be served by any web server as dynamic/static content or as local files: Ex.:
+
+```javascript
+    // hello action. Example URL: https://mywebsite.com/hello.js
+    var action = function(context, args) {
+        return "HELLO: " + args["user"]
+    }
+```  
+
+## Scripting a Hello World DSL
+
+```json
+{
+  "@id": "hello-world-script",
+  "author": {
+    "name": "YourName",
+    "e-mail": "me@email.com"
+  },
+  "import": [
+    {
+      "action": "hello",
+      "url": "https://mywebsite.com/hello.js"
+    }
+  ],
+  "_comment": "sample hello world script",
+  "flow": [
+    {
+      "@id": "main",
+      "sequence": [
+        {
+          "action": "hello",
+          "args": {
+            "user": "user {{session.user}}"
+          }
+        }
+      ]
+    },
+    {
+      "@id": "exitWithError",
+      "sequence": [
+        {
+          "action": "hello",
+          "args": {
+            "text": "user {{session.user}} your got an error {{ERROR}}"
+          }
+        }
+      ]
+    }
+  ],
+  "exceptionally": {
+    "do": {
+      "sequence": "exitWithError",
+      "args": {
+        "ERROR": "{{exception.message}}"
+      }
+    }
+  }
+}
+```  
+
+
+## Running the script
 
 ```kotlin
-    fun `running script`() {
-    
-            val engine = FlowEngine()
-    
-            engine.register("answer", JavascriptAction(answerAction))
-            engine.register("hangup", JavascriptAction(hangupAction))
-            engine.register("say") {
-                object : Action {
-                    override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
-                        queue.offer(args["text"] as String)
-                        return "ok"
-                    }
-                }
-            }
-            engine.register("expression", ExpressionAction())
-    
-            val script = Script.from(loadResource("/script-example.json"))        
-            val args = """
-                {
-                  "session":{
-                  "user":"john"
-                  }
-                }
-            """
 
-            engine.run { script.with(args) }
+    val script = Script.from(scriptText)        
+    val args = """
+        {
+          "session":{
+          "user":"john"
+          }
+        }
+    """
+    FlowEngine().run { script.with(args) }
+        .onException { e -> e.printStackTrace() }
 
-    }
 ```
-
+    
 under construction...
