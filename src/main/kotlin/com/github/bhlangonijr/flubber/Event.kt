@@ -11,6 +11,7 @@ class Event constructor(val data: JsonNode) {
     companion object {
 
         const val EVENT_NAME_FIELD = "event"
+        const val ARGS_NAME_FIELD = "args"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -18,7 +19,7 @@ class Event constructor(val data: JsonNode) {
 
         fun load(source: InputStream): Event = load(mapper.readTree(source))
 
-        fun load(source: String): Event = load(mapper.readTree(source))
+        fun from(source: String): Event = load(mapper.readTree(source))
 
         fun load(data: JsonNode): Event = Event(data)
 
@@ -26,4 +27,7 @@ class Event constructor(val data: JsonNode) {
 
     val name: String?
         get() = data.get(EVENT_NAME_FIELD)?.asText()
+
+    val args: JsonNode?
+        get() = data.get(ARGS_NAME_FIELD)
 }

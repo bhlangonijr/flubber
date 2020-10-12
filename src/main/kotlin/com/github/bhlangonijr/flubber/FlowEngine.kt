@@ -91,9 +91,10 @@ class FlowEngine(
             context.script.hooks()
                 ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
                 ?.let { hooks ->
+                    logger.debug { "Script hook calling event ${event.name}" }
                     val threadId = getId(event.name ?: "hook")
-                    context.setThreadState(threadId, ExecutionState.NEW)
-                    executeDoElse(hooks.first(), true, context, event.data, threadId)
+                    executeDoElse(hooks.first(), true, context, event.args, threadId)
+                    context.setThreadState(threadId, ExecutionState.RUNNING)
                     dispatch(context)
                 }
         }

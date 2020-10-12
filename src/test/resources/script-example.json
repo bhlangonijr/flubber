@@ -80,7 +80,7 @@
         {
           "action": "say",
           "args": {
-            "text": "exited {{session.user}}"
+            "text": "exited {{session.user}} with {{HANGUP_CODE}}"
           }
         },
         {
@@ -118,7 +118,7 @@
       "do": {
         "sequence": "exit",
         "args": {
-          "HANGUP_CODE": "{{event.code}}"
+          "HANGUP_CODE": "{{code}}"
         }
       }
     }
