@@ -11,8 +11,8 @@ class Callback constructor(val data: JsonNode) {
     companion object {
 
         const val ID_FIELD = "id"
-
         const val THREAD_ID_FIELD = "threadId"
+        const val RESULT_FIELD = "result"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -20,9 +20,9 @@ class Callback constructor(val data: JsonNode) {
 
         fun load(source: InputStream): Callback = load(mapper.readTree(source))
 
-        fun load(source: String): Callback = load(mapper.readTree(source))
-
         fun load(data: JsonNode): Callback = Callback(data)
+
+        fun from(source: String): Callback = load(mapper.readTree(source))
 
     }
 
@@ -31,4 +31,7 @@ class Callback constructor(val data: JsonNode) {
 
     val threadId: String
         get() = data.get(THREAD_ID_FIELD).asText()
+
+    val result: JsonNode
+        get() = data.get(RESULT_FIELD)
 }

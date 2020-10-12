@@ -2,11 +2,13 @@ package com.github.bhlangonijr.flubber.action
 
 import com.fasterxml.jackson.databind.JsonNode
 import javax.script.Invocable
+import javax.script.ScriptEngine
 import javax.script.ScriptEngineManager
 
-class ExpressionAction : Action {
-
-    private val engine = ScriptEngineManager().getEngineByName("javascript")
+class ExpressionAction(
+    private val engine: ScriptEngine =
+        ScriptEngineManager().getEngineByName("javascript")
+) : Action {
 
     override fun execute(context: JsonNode, args: Map<String, Any?>): Boolean {
 

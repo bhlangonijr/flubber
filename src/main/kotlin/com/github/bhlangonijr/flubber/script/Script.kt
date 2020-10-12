@@ -39,6 +39,7 @@ class Script private constructor(
         const val RELOAD_FIELD_NAME = "reload"
         const val EXIT_NODE_FIELD_NAME = "exit"
         const val CALLBACK_NODE_FIELD_NAME = "callback"
+        const val SET_FIELD_NAME = "set"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 

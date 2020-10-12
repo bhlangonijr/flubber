@@ -8,6 +8,7 @@ import com.github.bhlangonijr.flubber.action.PythonAction
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.script.ScriptException
 import com.github.bhlangonijr.flubber.util.Util.Companion.loadResource
+import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -99,5 +100,64 @@ class FlowEngineTest {
         }
 
         assertTrue(queue.poll(5, TimeUnit.SECONDS) is ScriptException)
+    }
+
+    @Test
+    fun `test resuming script with callback`() {
+
+        val queue = ArrayBlockingQueue<String>(3)
+        val queueRequest = ArrayBlockingQueue<JsonNode>(2)
+        val engine = FlowEngine()
+
+        val script = Script.from(loadResource("/script-example.json"))
+        script.register("answer", JavascriptAction(answerAction))
+        script.register("hangup", JavascriptAction(hangupAction))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+        script.register(
+            "waitOnDigits", JavascriptAction(
+                """
+        var action = function(context, args) {
+            var result = {
+              "callback": true,
+              "threadId": args.threadId
+            }
+            return result;
+        }   
+        """.trimIndent()
+            )
+        )
+
+        val context = script.with(args)
+        engine.run { context }.onAction { node, _, result ->
+            if (node["action"]?.asText() == "waitOnDigits") {
+                queueRequest.offer(objectToNode(result!!))
+            }
+        }
+
+        queueRequest.poll(5, TimeUnit.SECONDS)?.let {
+            //fake external service response
+            engine.callback(
+                context, Callback.from(
+                    """ 
+                {
+                  "threadId": "${it["threadId"].asText()}",
+                  "result": "1000"
+                }
+            """.trimIndent()
+                )
+            )
+                .onException { e -> e.printStackTrace() }
+        }
+
+        assertEquals("hello john, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one john", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("bye john, returned from decision", queue.poll(5, TimeUnit.SECONDS))
     }
 }

@@ -2,10 +2,12 @@ package com.github.bhlangonijr.flubber
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+import com.github.bhlangonijr.flubber.Callback.Companion.THREAD_ID_FIELD
 import com.github.bhlangonijr.flubber.Event.Companion.EVENT_NAME_FIELD
 import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.Context.Companion.EMPTY_OBJECT
 import com.github.bhlangonijr.flubber.context.Context.Companion.GLOBAL_ARGS_FIELD
+import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAX_STACK_SIZE
 import com.github.bhlangonijr.flubber.context.ExecutionState
 import com.github.bhlangonijr.flubber.context.StackFrame
@@ -17,6 +19,7 @@ import com.github.bhlangonijr.flubber.script.Script.Companion.DO_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ELSE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.EXIT_NODE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SEQUENCE_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.SET_FIELD_NAME
 import com.github.bhlangonijr.flubber.util.NamedThreadFactory
 import com.github.bhlangonijr.flubber.util.Util.Companion.bindVars
 import com.github.bhlangonijr.flubber.util.Util.Companion.getId
@@ -44,32 +47,56 @@ class FlowEngine(
 
     fun run(context: Context): Context {
 
-        logger.debug { "Executing script ${context.script.name}" }
-        dispatch(context)
-
+        if (context.threadStateValue(MAIN_THREAD_ID) != ExecutionState.NEW) {
+            context.invokeExceptionListeners(ScriptStateException("Script already running"))
+        } else {
+            logger.debug { "Executing script ${context.script.name}" }
+            dispatch(context)
+        }
         return context
 
     }
 
     fun callback(context: Context, callback: Callback): Context {
 
-        logger.debug { "Callback script ${context.script.name}" }
-        context.setThreadState(callback.threadId, ExecutionState.RUNNING)
-        dispatch(context)
+        if (context.threadStateValue(callback.threadId) != ExecutionState.WAITING) {
+            context.invokeExceptionListeners(ScriptStateException("Script not in awaiting state"))
+        } else {
+            logger.debug { "Callback script ${context.script.name}" }
+            context.pop(callback.threadId)?.let { frame ->
+                val result: Any = if (callback.result.isObject) {
+                    nodeToMap(callback.result)
+                } else callback.result.asText()
+                context.push(
+                    callback.threadId,
+                    StackFrame.create(frame.sequence, frame.actionIndex, frame.args, result)
+                )
+                frame.args[SET_FIELD_NAME]?.let { field ->
+                    context.globalArgs.set<JsonNode>(field as String, objectToNode(result))
+                }
+                context.setThreadState(callback.threadId, ExecutionState.RUNNING)
+                logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
+                dispatch(context)
+            }
+        }
         return context
     }
 
     fun hook(context: Context, event: Event): Context {
 
-        logger.debug { "Script hook ${event.name}" }
-        context.script.hooks()
-            ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
-            ?.let { hooks ->
-                val threadId = getId(event.name ?: "hook")
-                context.setThreadState(threadId, ExecutionState.NEW)
-                executeDoElse(hooks.first(), true, context, event.data, threadId)
-                dispatch(context)
-            }
+        if (context.threadStateValue(MAIN_THREAD_ID) == ExecutionState.FINISHED) {
+            context.invokeExceptionListeners(ScriptStateException("Script execution is already terminated"))
+        } else {
+            logger.debug { "Script hook ${event.name}" }
+            context.script.hooks()
+                ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
+                ?.let { hooks ->
+                    val threadId = getId(event.name ?: "hook")
+                    context.setThreadState(threadId, ExecutionState.NEW)
+                    executeDoElse(hooks.first(), true, context, event.data, threadId)
+                    dispatch(context)
+                }
+        }
         return context
     }
 
@@ -98,6 +125,7 @@ class FlowEngine(
                 runCatching {
                     executeOneStep(context, threadId)
                 }.onFailure { exception ->
+                    context.invokeExceptionListeners(ScriptException("Script error", exception))
                     context.script.exceptionally()
                         ?.let { action ->
                             if (onExceptionBlock.not()) {
@@ -106,7 +134,6 @@ class FlowEngine(
                                 executeDoElse(action, true, context, jsonException(exception), threadId)
                             } else {
                                 context.setThreadState(threadId, ExecutionState.FINISHED)
-                                context.invokeExceptionListeners(ScriptException("Script error", exception))
                             }
                         } ?: throw NotHandledScriptException("Not handled Script error", exception)
                 }
@@ -121,12 +148,18 @@ class FlowEngine(
             context.next(threadId)?.let { frame ->
                 val action = frame.node
                 val args = nodeToMap(action["args"] ?: EMPTY_OBJECT)
+                args[THREAD_ID_FIELD] = threadId
                 val globalArgs = context.globalArgs
                 bindVars(args, globalArgs)
                 val result = executeAction(context, action, args, globalArgs)
-                context.invokeActionListeners(action, args, result)
+                args[SET_FIELD_NAME]?.let { field ->
+                    result?.let {
+                        globalArgs.set<JsonNode>(field as String, objectToNode(result))
+                    }
+                }
                 context.push(threadId, StackFrame.create(frame.sequenceId, frame.actionIndex, args, result))
                 processResult(action, result, context, threadId)
+                context.invokeActionListeners(action, args, result)
             }
         }
     }
