@@ -5,6 +5,9 @@ import javax.script.Invocable
 import javax.script.ScriptEngine
 import javax.script.ScriptEngineManager
 
+/**
+ * Executes de do-else block depending on the result of the expression
+ */
 class ExpressionAction(
     private val engine: ScriptEngine =
         ScriptEngineManager().getEngineByName("javascript")

@@ -32,7 +32,7 @@ import java.util.concurrent.Executors
 
 
 class FlowEngine(
-    val executor: Executor = Executors.newCachedThreadPool(
+    private val executor: Executor = Executors.newCachedThreadPool(
         NamedThreadFactory("executor-thread")
     )
 ) {

@@ -1,12 +1,13 @@
-Flubber 
+Flubber
 =========================
 
 [![](https://jitpack.io/v/bhlangonijr/flubber.svg)](https://jitpack.io/#bhlangonijr/flubber)
 
-Flubber is a simple kotlin/java library for building workflow and automation task [domain-specific languages](https://en.wikipedia.org/wiki/Domain-specific_language).
- 
+Flubber is a simple kotlin/java library for building workflow and automation
+task [domain-specific languages](https://en.wikipedia.org/wiki/Domain-specific_language).
 
 # Building/Installing
+
 ## From source
 
 ```
@@ -58,9 +59,9 @@ dependencies {
 
 # Usage
 
-The building blocks of any scripts are the actions. Currently actions written in Javascript and Python are supported 
-as long as the expected interface is implemented - a simple function having arguments `context` and `args`. These actions can 
-be served by any web server as dynamic/static content or as local files: Ex.:
+The building blocks of any scripts are the actions. Currently actions written in Javascript and Python are supported as
+long as the expected interface is implemented - a simple function having arguments `context` and `args`. These actions
+can be served by any web server as dynamic/static content or as local files: Ex.:
 
 ```javascript
     // hello action. Example URL: https://mywebsite.com/hello.js
@@ -120,7 +121,6 @@ be served by any web server as dynamic/static content or as local files: Ex.:
 }
 ```  
 
-
 ## Running the script
 
 ```kotlin
@@ -137,5 +137,5 @@ be served by any web server as dynamic/static content or as local files: Ex.:
         .onException { e -> e.printStackTrace() }
 
 ```
-    
+
 under construction...

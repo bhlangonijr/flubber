@@ -64,6 +64,28 @@ class FlowEngineTest {
     }
 
     @Test
+    fun `test running script with unconditional block`() {
+
+        val queue = ArrayBlockingQueue<String>(3)
+        val engine = FlowEngine()
+
+        val script = Script.from(loadResource("/script-example-run.json"))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+        engine.run { script.with(args) }
+
+        assertEquals("hello john.", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one john", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("bye john, returned from run", queue.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test
     fun `test missing actions in main flow`() {
 
         val queue = ArrayBlockingQueue<String>(2)
@@ -179,7 +201,8 @@ class FlowEngineTest {
                 }
             }
         }
-        script.register("waitOnDigits", JavascriptAction(
+        script.register(
+            "waitOnDigits", JavascriptAction(
                 """
         var action = function(context, args) {
             var result = {
@@ -201,14 +224,18 @@ class FlowEngineTest {
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service to call a hook
-            engine.hook(context, Event.from("""
+            engine.hook(
+                context, Event.from(
+                    """
                 {
                   "event": "hangup",
                   "args": {
                     "code": "external quit"
                   }
                 }
-            """.trimIndent()))
+            """.trimIndent()
+                )
+            )
                 .onException { e -> e.printStackTrace() }
         }
 

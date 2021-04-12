@@ -4,10 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import com.github.bhlangonijr.flubber.action.Action
-import com.github.bhlangonijr.flubber.action.Actions
-import com.github.bhlangonijr.flubber.action.ExitAction
-import com.github.bhlangonijr.flubber.action.ExpressionAction
+import com.github.bhlangonijr.flubber.action.*
 import com.github.bhlangonijr.flubber.context.Context
 import mu.KotlinLogging
 import java.io.BufferedReader
@@ -67,6 +64,7 @@ class Script private constructor(
             val result = Script(script)
             result.register("expression", ExpressionAction())
             result.register("exit", ExitAction())
+            result.register("run", runAction())
             result.loadImports()
             return result
         }

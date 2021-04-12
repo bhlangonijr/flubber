@@ -1,0 +1,47 @@
+{
+  "@id": "simple-call-flow",
+  "author": {
+    "name": "Ben-Hur",
+    "e-mail": "bhlangonijr@gmail.com"
+  },
+  "_comment": "sample script of a call flow scenario",
+  "flow": [
+    {
+      "@id": "main",
+      "sequence": [
+        {
+          "action": "say",
+          "args": {
+            "text": "hello {{session.user}}."
+          }
+        },
+        {
+          "decision": "run",
+          "do": {
+            "sequence": "greet",
+            "args": {
+              "HANGUP_CODE": "normal"
+            }
+          }
+        },
+        {
+          "action": "say",
+          "args": {
+            "text": "bye {{session.user}}, returned from run"
+          }
+        }
+      ]
+    },
+    {
+      "@id": "greet",
+      "sequence": [
+        {
+          "action": "say",
+          "args": {
+            "text": "have a good one {{session.user}}"
+          }
+        }
+      ]
+    }
+  ]
+}
