@@ -16,7 +16,7 @@
           }
         },
         {
-          "decision": "run",
+          "action": "run",
           "do": {
             "sequence": "greet",
             "args": {
