@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.Callback.Companion.THREAD_ID_FIELD
 import com.github.bhlangonijr.flubber.Event.Companion.EVENT_NAME_FIELD
 import com.github.bhlangonijr.flubber.context.Context
+import com.github.bhlangonijr.flubber.context.Context.Companion.ASYNC_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.EMPTY_OBJECT
 import com.github.bhlangonijr.flubber.context.Context.Companion.GLOBAL_ARGS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
@@ -13,7 +14,6 @@ import com.github.bhlangonijr.flubber.context.ExecutionState
 import com.github.bhlangonijr.flubber.context.StackFrame
 import com.github.bhlangonijr.flubber.script.*
 import com.github.bhlangonijr.flubber.script.Script.Companion.ACTION_FIELD_NAME
-import com.github.bhlangonijr.flubber.script.Script.Companion.CALLBACK_NODE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.DECISION_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.DO_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ELSE_FIELD_NAME
@@ -152,6 +152,9 @@ class FlowEngine(
                 args[THREAD_ID_FIELD] = threadId
                 val globalArgs = context.globalArgs
                 bindVars(args, globalArgs)
+                if (args[ASYNC_FIELD] == true) {
+                    context.setThreadState(threadId, ExecutionState.WAITING)
+                }
                 val result = executeAction(context, action, args, globalArgs)
                 args[SET_FIELD_NAME]?.let { field ->
                     result?.let {
@@ -219,8 +222,6 @@ class FlowEngine(
             when {
                 resultNode.get(EXIT_NODE_FIELD_NAME)?.asBoolean() == true ->
                     context.setThreadState(threadId, ExecutionState.FINISHED)
-                resultNode.get(CALLBACK_NODE_FIELD_NAME)?.asBoolean() == true ->
-                    context.setThreadState(threadId, ExecutionState.WAITING)
             }
         }
     }

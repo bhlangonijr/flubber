@@ -24,7 +24,8 @@
           "args": {
             "length": 4,
             "timeout": 10,
-            "set": "DIGITS"
+            "set": "DIGITS",
+            "async": true
           }
         },
         {

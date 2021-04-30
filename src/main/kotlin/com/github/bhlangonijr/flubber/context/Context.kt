@@ -26,6 +26,7 @@ class Context private constructor(
         const val STACK_FIELD = "stack"
         const val GLOBAL_ARGS_FIELD = "args"
         const val RESULT_FIELD = "result"
+        const val ASYNC_FIELD = "async"
         const val STATE_FIELD = "state"
         const val SEQUENCE_ID_FIELD = "sequenceId"
         const val ACTION_ID_FIELD = "actionId"

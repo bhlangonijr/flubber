@@ -21,8 +21,7 @@
             "action": "say",
             "args": {
               "text": "hello {{session.user}}, press 1000 to greet or 2000 to quit."
-            },
-            "async": true
+            }
           }
         ]
       },

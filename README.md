@@ -36,7 +36,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
   <groupId>com.github.bhlangonijr</groupId>
   <artifactId>flubber</artifactId>
-  <version>0.3.1</version>
+  <version>0.3.2</version>
 </dependency>
 ```
 
@@ -52,7 +52,7 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.3.1'
+    implementation 'com.github.bhlangonijr:flubber:0.3.2'
     ...
 }
 ```
@@ -125,16 +125,16 @@ can be served by any web server as dynamic/static content or as local files, e.g
 
 ```kotlin
 
-    val script = Script.from(scriptText)        
-    val args = """
+val script = Script.from(scriptText)
+val args = """
         {
           "session":{
           "user":"john"
           }
         }
     """
-    FlowEngine().run { script.with(args) }
-        .onException { e -> e.printStackTrace() }
+FlowEngine().run { script.with(args) }
+    .onException { e -> e.printStackTrace() }
 
 ```
 

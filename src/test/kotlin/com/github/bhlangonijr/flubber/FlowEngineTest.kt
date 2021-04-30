@@ -131,12 +131,12 @@ class FlowEngineTest {
         val queueRequest = ArrayBlockingQueue<JsonNode>(2)
         val engine = FlowEngine()
 
-        val script = Script.from(loadResource("/script-example.json"))
+        val script = Script.from(loadResource("/script-example-async.json"))
         script.register("answer", JavascriptAction(answerAction))
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -190,7 +190,7 @@ class FlowEngineTest {
         val queueRequest = ArrayBlockingQueue<JsonNode>(2)
         val engine = FlowEngine()
 
-        val script = Script.from(loadResource("/script-example.json"))
+        val script = Script.from(loadResource("/script-example-async.json"))
         script.register("answer", JavascriptAction(answerAction))
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
