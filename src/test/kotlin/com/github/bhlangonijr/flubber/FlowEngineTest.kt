@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.action.Action
 import com.github.bhlangonijr.flubber.action.JavascriptAction
 import com.github.bhlangonijr.flubber.action.PythonAction
+import com.github.bhlangonijr.flubber.context.ExecutionState
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.script.ScriptException
 import com.github.bhlangonijr.flubber.util.Util.Companion.loadResource
@@ -86,6 +87,61 @@ class FlowEngineTest {
     }
 
     @Test
+    fun `test running script and respond to listeners`() {
+
+        val queue = ArrayBlockingQueue<String>(3)
+        val queueRequest = ArrayBlockingQueue<JsonNode>(2)
+        val queueState = ArrayBlockingQueue<ExecutionState>(3)
+        val engine = FlowEngine()
+
+        val script = Script.from(loadResource("/script-example-async.json"))
+        script.register("answer", JavascriptAction(answerAction))
+        script.register("hangup", JavascriptAction(hangupAction))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+        script.register("waitOnDigits", JavascriptAction("""
+        var action = function(context, args) {
+            var result = {
+              "callback": true,
+              "threadId": args.threadId
+            }
+            return result;
+        }   
+        """.trimIndent()))
+
+        val context = script.with(args)
+        engine.run { context }.onAction { node, _, result ->
+            if (node["action"]?.asText() == "waitOnDigits") {
+                queueRequest.offer(objectToNode(result!!))
+            }
+        }.onStateChange { _, state ->
+            queueState.offer(state)
+        }
+
+        queueRequest.poll(5, TimeUnit.SECONDS)?.let {
+            //fake external service response
+            engine.callback(
+                context, Callback.from(""" 
+                {
+                  "threadId": "${it["threadId"].asText()}",
+                  "result": "1000"
+                }
+            """.trimIndent())
+            ).onException { e -> e.printStackTrace() }
+        }
+        (1..3).forEach { _ -> queue.poll(5, TimeUnit.SECONDS) }
+        assertEquals(ExecutionState.RUNNING, queueState.poll(5, TimeUnit.SECONDS))
+        assertEquals(ExecutionState.WAITING, queueState.poll(5, TimeUnit.SECONDS))
+        assertEquals(ExecutionState.FINISHED, queueState.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test
     fun `test missing actions in main flow`() {
 
         val queue = ArrayBlockingQueue<String>(2)
@@ -142,9 +198,7 @@ class FlowEngineTest {
                 }
             }
         }
-        script.register(
-            "waitOnDigits", JavascriptAction(
-                """
+        script.register("waitOnDigits", JavascriptAction("""
         var action = function(context, args) {
             var result = {
               "callback": true,
@@ -152,9 +206,7 @@ class FlowEngineTest {
             }
             return result;
         }   
-        """.trimIndent()
-            )
-        )
+        """.trimIndent()))
 
         val context = script.with(args)
         engine.run { context }.onAction { node, _, result ->
@@ -201,9 +253,7 @@ class FlowEngineTest {
                 }
             }
         }
-        script.register(
-            "waitOnDigits", JavascriptAction(
-                """
+        script.register("waitOnDigits", JavascriptAction("""
         var action = function(context, args) {
             var result = {
               "callback": true,
@@ -211,9 +261,7 @@ class FlowEngineTest {
             }
             return result;
         }   
-        """.trimIndent()
-            )
-        )
+        """.trimIndent()))
 
         val context = script.with(args)
         engine.run { context }.onAction { node, _, result ->
@@ -225,18 +273,14 @@ class FlowEngineTest {
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service to call a hook
             engine.hook(
-                context, Event.from(
-                    """
+                context, Event.from("""
                 {
                   "event": "hangup",
                   "args": {
                     "code": "external quit"
                   }
                 }
-            """.trimIndent()
-                )
-            )
-                .onException { e -> e.printStackTrace() }
+            """.trimIndent())).onException { e -> e.printStackTrace() }
         }
 
         assertEquals("hello john, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))

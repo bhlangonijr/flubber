@@ -85,6 +85,6 @@ class ContextTest {
         frame = context.next()
         context.push(threadId, StackFrame.create(frame!!.sequenceId, frame.actionIndex))
         assertEquals("waitOnDigits", frame.node["action"]!!.asText())
+        assertEquals(ExecutionState.RUNNING, context.threadStateValue(MAIN_THREAD_ID))
     }
-
 }

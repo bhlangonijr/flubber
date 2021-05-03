@@ -63,21 +63,23 @@ class FlowEngine(
             context.invokeExceptionListeners(ScriptStateException("Script not in awaiting state"))
         } else {
             logger.debug { "Callback script ${context.script.name}" }
-            context.pop(callback.threadId)?.let { frame ->
-                val result: Any = if (callback.result.isObject) {
-                    nodeToMap(callback.result)
-                } else callback.result.asText()
-                context.push(
-                    callback.threadId,
-                    StackFrame.create(frame.sequence, frame.actionIndex, frame.args, result)
-                )
-                frame.args[SET_FIELD_NAME]?.let { field ->
-                    context.globalArgs.set<JsonNode>(field as String, objectToNode(result))
+            dispatch(context) {
+                context.pop(callback.threadId)?.let { frame ->
+                    val result: Any = if (callback.result.isObject) {
+                        nodeToMap(callback.result)
+                    } else callback.result.asText()
+                    context.push(
+                        callback.threadId,
+                        StackFrame.create(frame.sequence, frame.actionIndex, frame.args, result)
+                    )
+                    frame.args[SET_FIELD_NAME]?.let { field ->
+                        context.globalArgs.set<JsonNode>(field as String, objectToNode(result))
+                    }
+                    context.setThreadState(callback.threadId, ExecutionState.RUNNING)
+                    logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
                 }
-                context.setThreadState(callback.threadId, ExecutionState.RUNNING)
-                logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
-                dispatch(context)
             }
+
         }
         return context
     }
@@ -88,22 +90,24 @@ class FlowEngine(
             context.invokeExceptionListeners(ScriptStateException("Script execution is already terminated"))
         } else {
             logger.debug { "Script hook ${event.name}" }
-            context.script.hooks()
-                ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
-                ?.let { hooks ->
-                    logger.debug { "Script hook calling event ${event.name}" }
-                    val threadId = getId(event.name ?: "hook")
-                    executeDoElse(hooks.first(), true, context, event.args, threadId)
-                    context.setThreadState(threadId, ExecutionState.RUNNING)
-                    dispatch(context)
-                }
+            dispatch(context) {
+                context.script.hooks()
+                    ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
+                    ?.let { hooks ->
+                        val threadId = getId(event.name ?: "hook")
+                        executeDoElse(hooks.first(), true, context, event.args, threadId)
+                        context.setThreadState(threadId, ExecutionState.RUNNING)
+                        logger.debug { "Script hook calling event ${event.name}" }
+                    }
+            }
         }
         return context
     }
 
-    private fun dispatch(context: Context) {
+    private fun dispatch(context: Context, runSequentially: () -> Any? = {}) {
 
         dispatcherExecutor.execute {
+            runSequentially.invoke()
             if (processMonitorMap[context.id] == null) {
                 processMonitorMap[context.id] = context
                 executor.execute {
@@ -124,7 +128,12 @@ class FlowEngine(
         while (context.running) {
             for (threadId in context.state.fieldNames()) {
                 runCatching {
+                    val initialState = context.threadStateValue(threadId)
                     executeOneStep(context, threadId)
+                    val finalState = context.threadStateValue(threadId)
+                    if (initialState != context.threadStateValue(threadId)) {
+                        context.invokeStateListeners(threadId, finalState)
+                    }
                 }.onFailure { exception ->
                     context.invokeExceptionListeners(ScriptException("Script error", exception))
                     context.script.exceptionally()

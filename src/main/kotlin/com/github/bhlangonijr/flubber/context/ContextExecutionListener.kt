@@ -30,9 +30,9 @@ open class ContextExecutionListener {
         return this
     }
 
-    fun onStateChange(action: StateEvent): ContextExecutionListener {
+    fun onStateChange(state: StateEvent): ContextExecutionListener {
 
-        stateListeners.add(action)
+        stateListeners.add(state)
         return this
     }
 

@@ -87,7 +87,6 @@ class Context private constructor(
     fun setThreadState(threadId: String, executionState: ExecutionState) {
 
         state.put(threadId, executionState.name)
-        invokeStateListeners(threadId, executionState)
         if (threadId == MAIN_THREAD_ID && executionState == ExecutionState.FINISHED) {
             invokeOnCompleteListeners()
         }

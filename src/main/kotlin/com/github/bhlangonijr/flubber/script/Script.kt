@@ -63,7 +63,7 @@ class Script private constructor(
             val result = Script(script)
             result.register("expression", ExpressionAction())
             result.register("exit", ExitAction())
-            result.register("run", runAction())
+            result.register("run", RunAction())
             result.loadImports()
             return result
         }
