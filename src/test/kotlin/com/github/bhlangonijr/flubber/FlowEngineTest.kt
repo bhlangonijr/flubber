@@ -105,7 +105,9 @@ class FlowEngineTest {
                 }
             }
         }
-        script.register("waitOnDigits", JavascriptAction("""
+        script.register(
+            "waitOnDigits", JavascriptAction(
+                """
         var action = function(context, args) {
             var result = {
               "callback": true,
@@ -113,7 +115,9 @@ class FlowEngineTest {
             }
             return result;
         }   
-        """.trimIndent()))
+        """.trimIndent()
+            )
+        )
 
         val context = script.with(args)
         engine.run { context }.onAction { node, _, result ->
@@ -127,12 +131,14 @@ class FlowEngineTest {
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service response
             engine.callback(
-                context, Callback.from(""" 
+                context, Callback.from(
+                    """ 
                 {
                   "threadId": "${it["threadId"].asText()}",
                   "result": "1000"
                 }
-            """.trimIndent())
+            """.trimIndent()
+                )
             ).onException { e -> e.printStackTrace() }
         }
         (1..3).forEach { _ -> queue.poll(5, TimeUnit.SECONDS) }
@@ -198,7 +204,9 @@ class FlowEngineTest {
                 }
             }
         }
-        script.register("waitOnDigits", JavascriptAction("""
+        script.register(
+            "waitOnDigits", JavascriptAction(
+                """
         var action = function(context, args) {
             var result = {
               "callback": true,
@@ -206,7 +214,9 @@ class FlowEngineTest {
             }
             return result;
         }   
-        """.trimIndent()))
+        """.trimIndent()
+            )
+        )
 
         val context = script.with(args)
         engine.run { context }.onAction { node, _, result ->
@@ -253,7 +263,9 @@ class FlowEngineTest {
                 }
             }
         }
-        script.register("waitOnDigits", JavascriptAction("""
+        script.register(
+            "waitOnDigits", JavascriptAction(
+                """
         var action = function(context, args) {
             var result = {
               "callback": true,
@@ -261,7 +273,9 @@ class FlowEngineTest {
             }
             return result;
         }   
-        """.trimIndent()))
+        """.trimIndent()
+            )
+        )
 
         val context = script.with(args)
         engine.run { context }.onAction { node, _, result ->
@@ -273,14 +287,17 @@ class FlowEngineTest {
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service to call a hook
             engine.hook(
-                context, Event.from("""
+                context, Event.from(
+                    """
                 {
                   "event": "hangup",
                   "args": {
                     "code": "external quit"
                   }
                 }
-            """.trimIndent())).onException { e -> e.printStackTrace() }
+            """.trimIndent()
+                )
+            ).onException { e -> e.printStackTrace() }
         }
 
         assertEquals("hello john, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
