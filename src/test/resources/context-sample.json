@@ -1,6 +1,6 @@
 {
   "script": {
-    "@id": "sample",
+    "id": "sample",
     "author": {
       "name": "Ben-Hur",
       "e-mail": "bhlangonijr@gmail.com"
@@ -8,12 +8,12 @@
     "_comment": "sample script of a call flow scenario",
     "flow": [
       {
-        "@id": "main",
+        "id": "main",
         "sequence": [
           {
             "action": "answer",
             "args": {
-              "@id": "initial.answer",
+              "id": "initial.answer",
               "_comment": "call aliasing for referencing the call"
             }
           },
@@ -26,7 +26,7 @@
         ]
       },
       {
-        "@id": "exit",
+        "id": "exit",
         "sequence": [
           {
             "action": "say",

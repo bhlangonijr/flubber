@@ -74,7 +74,7 @@ can be served by any web server as dynamic/static content or as local files, e.g
 
 ```json
 {
-  "@id": "hello-world-script",
+  "id": "hello-world-script",
   "author": {
     "name": "YourName",
     "e-mail": "me@email.com"
@@ -88,7 +88,7 @@ can be served by any web server as dynamic/static content or as local files, e.g
   "_comment": "sample hello world script",
   "flow": [
     {
-      "@id": "main",
+      "id": "main",
       "sequence": [
         {
           "action": "hello",
@@ -99,7 +99,7 @@ can be served by any web server as dynamic/static content or as local files, e.g
       ]
     },
     {
-      "@id": "exitWithError",
+      "id": "exitWithError",
       "sequence": [
         {
           "action": "hello",

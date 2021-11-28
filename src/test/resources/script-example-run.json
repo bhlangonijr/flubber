@@ -1,5 +1,5 @@
 {
-  "@id": "simple-call-flow",
+  "id": "simple-call-flow",
   "author": {
     "name": "Ben-Hur",
     "e-mail": "bhlangonijr@gmail.com"
@@ -7,7 +7,7 @@
   "_comment": "sample script of a call flow scenario",
   "flow": [
     {
-      "@id": "main",
+      "id": "main",
       "sequence": [
         {
           "action": "say",
@@ -33,7 +33,7 @@
       ]
     },
     {
-      "@id": "greet",
+      "id": "greet",
       "sequence": [
         {
           "action": "say",

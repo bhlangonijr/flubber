@@ -13,7 +13,7 @@ class Actions {
         fun from(url: String): Action {
 
             val resource = URL(url)
-            val file = resource.file.toLowerCase()
+            val file = resource.file.lowercase()
             return when {
                 file.endsWith("js") -> JavascriptAction(readFromUrl(resource))
                 file.endsWith("py") -> PythonAction(readFromUrl(resource))

@@ -25,7 +25,7 @@ class Script private constructor(
         const val SEQUENCE_FIELD_NAME = "sequence"
         const val HOOKS_FIELD_NAME = "hooks"
         const val EXCEPTIONALLY_FIELD_NAME = "exceptionally"
-        const val ID_FIELD_NAME = "@id"
+        const val ID_FIELD_NAME = "id"
         const val ACTION_FIELD_NAME = "action"
         const val DECISION_FIELD_NAME = "decision"
         const val MAIN_FLOW_ID = "main"
