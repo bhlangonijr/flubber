@@ -64,6 +64,8 @@ class Script private constructor(
             result.register("expression", ExpressionAction())
             result.register("exit", ExitAction())
             result.register("run", RunAction())
+            result.register("rest", RestAction())
+            result.register("json", ParseJsonAction())
             result.loadImports()
             return result
         }
