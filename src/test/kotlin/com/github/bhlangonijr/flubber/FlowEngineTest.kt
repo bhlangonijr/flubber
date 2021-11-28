@@ -82,7 +82,7 @@ class FlowEngineTest {
         engine.run { script.with(args) }
 
         assertEquals("hello john.", queue.poll(5, TimeUnit.SECONDS))
-        assertEquals("have a good one john", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one john doe", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("bye john, returned from run", queue.poll(5, TimeUnit.SECONDS))
     }
 

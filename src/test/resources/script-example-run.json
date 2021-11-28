@@ -20,7 +20,7 @@
           "do": {
             "sequence": "greet",
             "args": {
-              "HANGUP_CODE": "normal"
+              "full_name": "{{session.user}} doe"
             }
           }
         },
@@ -38,7 +38,7 @@
         {
           "action": "say",
           "args": {
-            "text": "have a good one {{session.user}}"
+            "text": "have a good one {{full_name}}"
           }
         }
       ]

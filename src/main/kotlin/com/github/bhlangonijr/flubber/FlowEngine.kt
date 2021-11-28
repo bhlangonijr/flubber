@@ -157,7 +157,7 @@ class FlowEngine(
             logger.trace { "stack: ${context.stack.toPrettyString()}" }
             context.next(threadId)?.let { frame ->
                 val action = frame.node
-                val args = nodeToMap(action["args"] ?: EMPTY_OBJECT)
+                val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
                 args[THREAD_ID_FIELD] = threadId
                 val globalArgs = context.globalArgs
                 bindVars(args, globalArgs)
@@ -217,6 +217,8 @@ class FlowEngine(
             val sequence = block.get(SEQUENCE_FIELD_NAME)?.asText()
             val args = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
             blockArgs?.let { bindVars(args, it) }
+            val globalArgs = context.globalArgs
+            bindVars(args, globalArgs)
             context.globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
             sequence?.let { context.push(threadId, StackFrame.create(it, -1)) }
         }
