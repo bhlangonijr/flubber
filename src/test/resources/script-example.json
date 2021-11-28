@@ -1,5 +1,5 @@
 {
-  "@id": "simple-call-flow",
+  "id": "simple-call-flow",
   "author": {
     "name": "Ben-Hur",
     "e-mail": "bhlangonijr@gmail.com"
@@ -7,10 +7,10 @@
   "_comment": "sample script of a call flow scenario",
   "flow": [
     {
-      "@id": "main",
+      "id": "main",
       "sequence": [
         {
-          "@id": "initial.answer",
+          "id": "initial.answer",
           "action": "answer"
         },
         {
@@ -54,7 +54,7 @@
       ]
     },
     {
-      "@id": "exitWithError",
+      "id": "exitWithError",
       "sequence": [
         {
           "action": "say",
@@ -74,7 +74,7 @@
       ]
     },
     {
-      "@id": "exit",
+      "id": "exit",
       "sequence": [
         {
           "action": "say",
@@ -94,7 +94,7 @@
       ]
     },
     {
-      "@id": "greetAndExit",
+      "id": "greetAndExit",
       "sequence": [
         {
           "action": "say",

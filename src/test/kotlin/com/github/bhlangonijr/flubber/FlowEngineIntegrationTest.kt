@@ -13,14 +13,7 @@ import java.util.concurrent.TimeUnit
 class FlowEngineIntegrationTest {
 
     private val scriptWithImports = Script.from(loadResource("/script-example-import.json"))
-
-    val args = """
-            {
-              "session":{
-              "user":"john"
-              }
-            }
-        """
+    private val scriptWithRest = Script.from(loadResource("/script-example-rest.json"))
 
     @Test
     fun `test imported actions`() {
@@ -28,9 +21,17 @@ class FlowEngineIntegrationTest {
         val engine = FlowEngine()
         val queue = ArrayBlockingQueue<Boolean>(2)
 
+        val args = """
+            {
+              "session":{
+                "user":"john"
+              }
+            }
+        """
+
         scriptWithImports.register("waitOnDigits") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     val input = "1000"
                     args["set"]?.let { (context as ObjectNode).put(it as String, input) }
                     args["set"]?.let { (context as ObjectNode).put("COMPLETED", true) }
@@ -42,6 +43,33 @@ class FlowEngineIntegrationTest {
         val ctx = scriptWithImports.with(args)
         engine.run { ctx }.onComplete { queue.offer(ctx.globalArgs.get("COMPLETED").asBoolean()) }
         assertTrue(queue.poll(5, TimeUnit.SECONDS) == true)
+    }
+
+    @Test
+    fun `test rest actions`() {
+
+        val engine = FlowEngine()
+        val queue = ArrayBlockingQueue<String>(2)
+
+        val args = """
+            {
+              "session":{
+                "user":"john",
+                "url":"https://my-json-server.typicode.com/typicode/demo/profile"
+              }
+            }
+        """
+        scriptWithRest.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                    queue.offer(args["text"]?.toString() ?: "")
+                    return emptyMap<String, String>()
+                }
+            }
+        }
+        val ctx = scriptWithRest.with(args)
+        engine.run { ctx }
+        assertTrue(queue.poll(5, TimeUnit.SECONDS) == "Bot name: john")
     }
 
 }

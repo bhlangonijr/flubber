@@ -1,8 +1,8 @@
 group 'com.github.bhlangonijr'
-version '0.3.3'
+version '0.3.4'
 
 buildscript {
-    ext.kotlin_version = '1.4.21'
+    ext.kotlin_version = '1.5.10'
     repositories {
         mavenCentral()
     }
@@ -24,7 +24,7 @@ repositories {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation "org.jetbrains.kotlin:kotlin-reflect:1.4.0"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:1.5.10"
     implementation "com.fasterxml.jackson.module:jackson-module-kotlin:2.12.+"
     implementation "org.python:jython:2.5.3"
     implementation "org.erlang.otp:jinterface:1.6.1"
@@ -37,14 +37,14 @@ dependencies {
 }
 
 compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 
 test {
-    useJUnitPlatform()
+
     String testType = System.properties['test.type']
     if (testType == 'integration') {
         include '**/*IntegrationTest.*'
@@ -64,6 +64,7 @@ test {
         exclude '**/*IntegrationTest.*'
         exclude '**/*IntegrationSpec.*'
     }
+    useJUnitPlatform()
     afterSuite { desc, result ->
         if (!desc.parent) {
             println "\nTest result: ${result.resultType}"
@@ -75,11 +76,12 @@ test {
     }
 }
 task integrationTest(type: Test) {
-    useJUnitPlatform()
+
     description = 'Runs the integration tests :D'
     group = 'Verification'
     include '**/*IntegrationTest.*'
     include '**/*IntegrationSpec.*'
+    useJUnitPlatform()
     afterSuite { desc, result ->
         if (desc.className) {
             println "Test suite ${desc.name}: ${result.resultType}"

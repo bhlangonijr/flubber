@@ -36,7 +36,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
   <groupId>com.github.bhlangonijr</groupId>
   <artifactId>flubber</artifactId>
-  <version>0.3.3</version>
+  <version>0.3.4</version>
 </dependency>
 ```
 
@@ -52,19 +52,19 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.3.3'
+    implementation 'com.github.bhlangonijr:flubber:0.3.4'
     ...
 }
 ```
 
 # Usage
 
-The building blocks of any scripts are the actions. Currently actions written in Javascript and Python are supported as
-long as the expected interface is implemented - a simple function having arguments `context` and `args`. These actions
-can be served by any web server as dynamic/static content or as local files, e.g.:
+The building blocks of any scripts are the actions. Currently, Javascript and Python actions are supported 
+as long as they implement the expected interface - a simple function having arguments `context` and `args`. These actions
+can be served by any web server as dynamic/static content or as local files, e.g.,
 
 ```javascript
-    // hello action. Example URL: https://mywebsite.com/hello.js
+    // hello action. Served by URL: https://localhost:8080/myserver/hello.js
     var action = function(context, args) {
         return "HELLO: " + args["user"]
     }
@@ -74,7 +74,7 @@ can be served by any web server as dynamic/static content or as local files, e.g
 
 ```json
 {
-  "@id": "hello-world-script",
+  "id": "hello-world-script",
   "author": {
     "name": "YourName",
     "e-mail": "me@email.com"
@@ -82,13 +82,13 @@ can be served by any web server as dynamic/static content or as local files, e.g
   "import": [
     {
       "action": "hello",
-      "url": "https://mywebsite.com/hello.js"
+      "url": "https://localhost:8080/myserver/hello.js"
     }
   ],
   "_comment": "sample hello world script",
   "flow": [
     {
-      "@id": "main",
+      "id": "main",
       "sequence": [
         {
           "action": "hello",
@@ -99,7 +99,7 @@ can be served by any web server as dynamic/static content or as local files, e.g
       ]
     },
     {
-      "@id": "exitWithError",
+      "id": "exitWithError",
       "sequence": [
         {
           "action": "hello",
@@ -138,4 +138,116 @@ FlowEngine().run { script.with(args) }
 
 ```
 
-under construction...
+## Built-in actions
+
+Some out-of-box actions are available for building basic flows:
+
+## expression
+
+Evaluates a logic expression for conditionally executing sequences.
+
+```json
+        
+        {
+          "decision": "expression",
+          "args": {
+            "condition": "{{DIGITS}} == '1000'"
+          },
+          "do": {
+            "sequence": "greetAndExit",
+            "args": {
+              "HANGUP_CODE": "normal"
+            }
+          },
+          "else": {
+            "sequence": "exit",
+            "args": {
+              "HANGUP_CODE": "normal"
+            }
+          }
+        }
+```
+
+## exit
+
+Halts execution of a script.
+
+```json
+
+        {
+          "action": "exit"
+        }
+```
+
+## run
+
+Executes a sequence, returning to the calling sequence after finished.
+
+```json
+
+        {
+          "action": "run",
+          "do": {
+            "sequence": "greet",
+            "args": {
+              "greet_type": "normal"
+            }
+          }
+        }
+```
+
+## rest
+
+Call a REST/HTTP endpoint using specified params.
+Available methods: `post`, `put`, `get`, `delete`.
+
+```json
+
+        {
+          "action": "rest",
+          "args": {
+            "url": "https://exampleserver/api/user",
+            "method": "post",
+            "body": "{\"name\": \"{{session.user}}\"}",
+            "headers": "{\"Content-Type\": \"application/json\", \"Accept\": \"*/*\"}",
+            "set": "httResponse"
+          }
+        }
+```
+
+The response object contains a HTTP `status` code, `headers` and an optional `body`, e.g.,
+
+```json
+
+        {
+          "status": "200",
+          "body": {
+            "result": "OK"
+          },
+          "headers": {
+            "content-length": 20,
+            "content-type": "application/json; charset=utf-8"
+          }
+        }
+```
+
+## json
+
+The `json` action aids parsing json strings into structured objects so that it can be easily 
+manipulated by other actions as when you want to extract certain attribute values.
+
+In the example below `body` from the `httpResponse` has been parsed as a JSON object and result
+set to `userProfile`:
+```json
+
+        {
+          "action": "json",
+          "args": {
+            "text": "{{httResponse.body}}",
+            "set": "userProfile"
+          }
+        }
+```
+
+The field values can be resolved using mustaches further on `{{userProfile.name}}`.
+

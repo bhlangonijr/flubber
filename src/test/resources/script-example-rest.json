@@ -1,0 +1,54 @@
+{
+  "id": "simple-flow",
+  "author": {
+    "name": "Ben-Hur",
+    "e-mail": "bhlangonijr@gmail.com"
+  },
+  "_comment": "sample script for calling http/rest endpoints",
+  "flow": [
+    {
+      "id": "main",
+      "sequence": [
+        {
+          "action": "rest",
+          "args": {
+            "url": "{{session.url}}",
+            "method": "get",
+            "set": "responseGet"
+          }
+        },
+        {
+          "action": "rest",
+          "args": {
+            "url": "{{session.url}}",
+            "method": "post",
+            "body": "{\"name\": \"{{session.user}}\"}",
+            "headers": "{\"Content-Type\": \"application/json\", \"Accept\": \"*/*\"}",
+            "set": "responsePost"
+          }
+        },
+        {
+          "action": "json",
+          "args": {
+            "text": "{{responsePost.body}}",
+            "set": "bot"
+          }
+        },
+        {
+          "action": "rest",
+          "args": {
+            "url": "{{session.url}}",
+            "method": "delete",
+            "set": "responseDelete"
+          }
+        },
+        {
+          "action": "say",
+          "args": {
+            "text": "Bot name: {{bot.name}}"
+          }
+        }
+      ]
+    }
+  ]
+}
