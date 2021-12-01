@@ -1,0 +1,51 @@
+{
+  "id": "simple-call-flow",
+  "author": {
+    "name": "Ben-Hur",
+    "e-mail": "bhlangonijr@gmail.com"
+  },
+  "_comment": "sample script for iterating over an object array",
+  "flow": [
+    {
+      "id": "main",
+      "sequence": [
+        {
+          "action": "json",
+          "args": {
+            "text": "{\"users\":[{\"username\":\"john\"},{\"username\":\"mary\"},{\"username\":\"alice\"}]}",
+            "set": "object"
+          }
+        },
+        {
+          "action": "run",
+          "args": {
+            "iterateOver": "object.users"
+          },
+          "do": {
+            "sequence": "greet",
+            "args": {
+              "username": "{{iterationResult.username}}"
+            }
+          }
+        },
+        {
+          "action": "say",
+          "args": {
+            "text": "returned from iterations"
+          }
+        }
+      ]
+    },
+    {
+      "id": "greet",
+      "sequence": [
+        {
+          "action": "say",
+          "args": {
+            "text": "have a good one {{iterationResult.username}}"
+          }
+        }
+      ]
+    }
+  ]
+}

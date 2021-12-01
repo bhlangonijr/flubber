@@ -31,6 +31,8 @@ class Context private constructor(
         const val SEQUENCE_ID_FIELD = "sequenceId"
         const val ACTION_ID_FIELD = "actionId"
         const val EXCEPTION_FIELD = "exception"
+        const val REPEAT_FIELD = "repeat"
+        const val SEQUENCE_TYPE_FIELD = "sequenceType"
         const val MAX_STACK_SIZE = 50
         const val MAIN_THREAD_ID = "mainThreadId"
 
@@ -97,13 +99,10 @@ class Context private constructor(
     fun next(threadId: String = MAIN_THREAD_ID): FramePointer? =
         when (threadStateValue(threadId)) {
             ExecutionState.NEW -> {
-                val action = script.action(MAIN_FLOW_ID, 0)
-                if (action != null) {
+                script.sequence(MAIN_FLOW_ID)?.let {
                     setThreadState(threadId, ExecutionState.RUNNING)
-                    FramePointer(action, MAIN_FLOW_ID, 0)
-                } else {
-                    throw SequenceNotFoundException("Sequence [$MAIN_FLOW_ID] not found")
-                }
+                    FramePointer(EMPTY_OBJECT, MAIN_FLOW_ID, -1, true)
+                } ?: throw SequenceNotFoundException("Sequence [$MAIN_FLOW_ID] not found")
             }
             ExecutionState.RUNNING -> {
                 pop(threadId)?.let { frame ->
@@ -111,10 +110,10 @@ class Context private constructor(
                     val sequence = script.sequence(frame.sequence)
                         ?: throw SequenceNotFoundException("Sequence [${frame.sequence}] not found")
                     when {
-                        nextActionIndex < sequence.size() ->
-                            script.action(frame.sequence, nextActionIndex)
-                                ?.let { action -> FramePointer(action, frame.sequence, nextActionIndex) }
-                        threadStack(threadId).isEmpty.not() -> next()
+                        frame.sequenceType -> FramePointer(EMPTY_OBJECT, frame.sequence, nextActionIndex, true, frame)
+                        nextActionIndex < sequence.size() -> script.action(frame.sequence, nextActionIndex)
+                            ?.let { action -> FramePointer(action, frame.sequence, nextActionIndex, false, frame) }
+                        threadStack(threadId).isEmpty.not() -> next(threadId)
                         else -> {
                             setThreadState(threadId, ExecutionState.FINISHED)
                             null
@@ -144,7 +143,13 @@ class Context private constructor(
 
 }
 
-data class FramePointer(val node: JsonNode, val sequenceId: String, val actionIndex: Int)
+data class FramePointer(
+    val node: JsonNode,
+    val sequenceId: String,
+    val actionIndex: Int,
+    val sequenceType: Boolean,
+    val previousFrame: StackFrame? = null
+)
 
 data class StackFrame(val data: ObjectNode) {
 
@@ -154,14 +159,18 @@ data class StackFrame(val data: ObjectNode) {
 
         fun create(
             sequenceId: String,
-            actionIndex: Int,
+            actionIndex: Int = -1,
+            sequenceType: Boolean = false,
             args: Map<String, Any?> = Collections.emptyMap(),
-            result: Any? = null
+            result: Any? = null,
+            repeat: Int? = 0
         ): StackFrame {
 
             val data = mapper.createObjectNode()
             data.put(Context.SEQUENCE_ID_FIELD, sequenceId)
             data.put(Context.ACTION_ID_FIELD, actionIndex)
+            data.put(Context.REPEAT_FIELD, repeat)
+            data.put(Context.SEQUENCE_TYPE_FIELD, sequenceType)
             val frame = StackFrame(data)
             frame.args = args
             frame.result = result
@@ -174,6 +183,12 @@ data class StackFrame(val data: ObjectNode) {
 
     val actionIndex: Int
         get() = data.get(Context.ACTION_ID_FIELD).asInt()
+
+    val repeat: Int
+        get() = data.get(Context.REPEAT_FIELD).asInt()
+
+    val sequenceType: Boolean
+        get() = data.get(Context.SEQUENCE_TYPE_FIELD).asBoolean()
 
     var args: Map<String, Any?>
         get() = nodeToMap(data.get(Context.GLOBAL_ARGS_FIELD))

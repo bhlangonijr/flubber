@@ -1,6 +1,7 @@
 package com.github.bhlangonijr.flubber
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.Callback.Companion.THREAD_ID_FIELD
 import com.github.bhlangonijr.flubber.Event.Companion.EVENT_NAME_FIELD
@@ -18,15 +19,18 @@ import com.github.bhlangonijr.flubber.script.Script.Companion.DECISION_FIELD_NAM
 import com.github.bhlangonijr.flubber.script.Script.Companion.DO_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ELSE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.EXIT_NODE_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.ITERATE_OVER_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SEQUENCE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_FIELD_NAME
 import com.github.bhlangonijr.flubber.util.NamedThreadFactory
 import com.github.bhlangonijr.flubber.util.Util.Companion.bindVars
 import com.github.bhlangonijr.flubber.util.Util.Companion.getId
 import com.github.bhlangonijr.flubber.util.Util.Companion.jsonException
+import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import mu.KotlinLogging
+import java.util.*
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -70,7 +74,13 @@ class FlowEngine(
                     } else callback.result.asText()
                     context.push(
                         callback.threadId,
-                        StackFrame.create(frame.sequence, frame.actionIndex, frame.args, result)
+                        StackFrame.create(
+                            sequenceId = frame.sequence,
+                            actionIndex = frame.actionIndex,
+                            args = frame.args,
+                            result = result,
+                            sequenceType = false
+                        )
                     )
                     frame.args[SET_FIELD_NAME]?.let { field ->
                         context.globalArgs.set<JsonNode>(field as String, objectToNode(result))
@@ -95,7 +105,7 @@ class FlowEngine(
                     ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
                     ?.let { hooks ->
                         val threadId = getId(event.name ?: "hook")
-                        executeDoElse(hooks.first(), true, context, event.args, threadId)
+                        executeDoElse(hooks.first(), true, context, event.args, Collections.emptyMap(), threadId)
                         context.setThreadState(threadId, ExecutionState.RUNNING)
                         logger.debug { "Script hook calling event ${event.name}" }
                     }
@@ -131,7 +141,7 @@ class FlowEngine(
                     val initialState = context.threadStateValue(threadId)
                     executeOneStep(context, threadId)
                     val finalState = context.threadStateValue(threadId)
-                    if (initialState != context.threadStateValue(threadId)) {
+                    if (initialState != finalState) {
                         context.invokeStateListeners(threadId, finalState)
                     }
                 }.onFailure { exception ->
@@ -141,7 +151,14 @@ class FlowEngine(
                             if (onExceptionBlock.not()) {
                                 onExceptionBlock = true
                                 context.threadStack(threadId).removeAll()
-                                executeDoElse(action, true, context, jsonException(exception), threadId)
+                                executeDoElse(
+                                    action,
+                                    true,
+                                    context,
+                                    jsonException(exception),
+                                    Collections.emptyMap(),
+                                    threadId
+                                )
                             } else {
                                 context.setThreadState(threadId, ExecutionState.FINISHED)
                             }
@@ -156,23 +173,72 @@ class FlowEngine(
         if (context.running(threadId)) {
             logger.trace { "stack: ${context.stack.toPrettyString()}" }
             context.next(threadId)?.let { frame ->
-                val action = frame.node
-                val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
-                args[THREAD_ID_FIELD] = threadId
-                val globalArgs = context.globalArgs
-                bindVars(args, globalArgs)
-                if (args[ASYNC_FIELD] == true) {
-                    context.setThreadState(threadId, ExecutionState.WAITING)
-                }
-                val result = executeAction(context, action, args, globalArgs)
-                args[SET_FIELD_NAME]?.let { field ->
-                    result?.let {
-                        globalArgs.set<JsonNode>(field as String, objectToNode(result))
+                logger.trace { "frame: $frame" }
+                //val sequenceArgs = makeJson()
+                if (frame.sequenceType) {
+                    frame.previousFrame?.let { lastFrame ->
+                        val args = objectToNode(lastFrame.args) as ObjectNode
+                        args["_elements"]?.takeIf { !it.isEmpty }?.let {
+                            val elements = it as ArrayNode
+                            val element = elements.remove(0)
+                            context.globalArgs.set<JsonNode>("iterationResult", objectToNode(element))
+                            if (!elements.isEmpty) {
+                                context.push(
+                                    threadId, StackFrame.create(
+                                        sequenceId = frame.sequenceId,
+                                        sequenceType = true,
+                                        args = nodeToMap(args)
+                                    )
+                                )
+                            }
+                        }
                     }
+                    context.push(
+                        threadId, StackFrame.create(
+                            sequenceId = frame.sequenceId
+                        )
+                    )
+                } else {
+                    val action = frame.node
+                    val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
+                    args[THREAD_ID_FIELD] = threadId
+                    val globalArgs = context.globalArgs
+                    bindVars(args, globalArgs)
+                    if (args[ASYNC_FIELD] == true) {
+                        context.setThreadState(threadId, ExecutionState.WAITING)
+                    }
+                    val result = executeAction(context, action, args, globalArgs)
+                    args[SET_FIELD_NAME]?.let { field ->
+                        result?.let {
+                            globalArgs.set<JsonNode>(field as String, objectToNode(result))
+                        }
+                    }
+                    val iterateOverNode = nodeToMap(args[ITERATE_OVER_FIELD_NAME]?.let {
+                        val path = it.toString().replace(".", "/")
+                        val node = globalArgs.at("/$path")
+                        val newNode = makeJson()
+                        when (node) {
+                            is ArrayNode -> newNode.putArray("_elements").addAll(node)
+                            else -> newNode.putArray("_elements").add(node)
+                        }
+                        newNode
+                    } ?: EMPTY_OBJECT)
+                    context.push(
+                        threadId, StackFrame.create(
+                            sequenceId = frame.sequenceId,
+                            actionIndex = frame.actionIndex,
+                            args = args,
+                            result = result
+                        )
+                    )
+                    when {
+                        result is Boolean ->
+                            executeDoElse(action, result, context, null, iterateOverNode, threadId)
+                        result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
+                            context.setThreadState(threadId, ExecutionState.FINISHED)
+                    }
+                    context.invokeActionListeners(action, args, result)
                 }
-                context.push(threadId, StackFrame.create(frame.sequenceId, frame.actionIndex, args, result))
-                processResult(action, result, context, threadId)
-                context.invokeActionListeners(action, args, result)
             }
         }
     }
@@ -204,6 +270,7 @@ class FlowEngine(
         result: Boolean,
         context: Context,
         blockArgs: JsonNode? = null,
+        iterateOverMap: MutableMap<String, Any?> = Collections.emptyMap(),
         threadId: String
     ) {
 
@@ -219,20 +286,15 @@ class FlowEngine(
             blockArgs?.let { bindVars(args, it) }
             val globalArgs = context.globalArgs
             bindVars(args, globalArgs)
-            context.globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
-            sequence?.let { context.push(threadId, StackFrame.create(it, -1)) }
-        }
-    }
-
-    private fun processResult(action: JsonNode, result: Any?, context: Context, threadId: String) {
-
-        if (result is Boolean) {
-            executeDoElse(action, result, context, null, threadId)
-        } else if (result is Map<*, *>) {
-            val resultNode = objectToNode(result)
-            when {
-                resultNode.get(EXIT_NODE_FIELD_NAME)?.asBoolean() == true ->
-                    context.setThreadState(threadId, ExecutionState.FINISHED)
+            globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
+            sequence?.let {
+                context.push(
+                    threadId, StackFrame.create(
+                        sequenceId = it,
+                        sequenceType = true,
+                        args = iterateOverMap
+                    )
+                )
             }
         }
     }

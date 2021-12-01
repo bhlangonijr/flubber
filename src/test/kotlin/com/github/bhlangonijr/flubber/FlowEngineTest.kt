@@ -33,7 +33,7 @@ class FlowEngineTest {
     @Test
     fun `test running full script`() {
 
-        val queue = ArrayBlockingQueue<String>(3)
+        val queue = ArrayBlockingQueue<String>(10)
         val engine = FlowEngine()
 
         val script = Script.from(loadResource("/script-example.json"))
@@ -41,7 +41,7 @@ class FlowEngineTest {
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -49,7 +49,7 @@ class FlowEngineTest {
         }
         script.register("waitOnDigits") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     val input = "1000"
                     args["set"]?.let { (context as ObjectNode).put(it as String, input) }
                     return input
@@ -91,7 +91,7 @@ class FlowEngineTest {
 
         val queue = ArrayBlockingQueue<String>(3)
         val queueRequest = ArrayBlockingQueue<JsonNode>(2)
-        val queueState = ArrayBlockingQueue<ExecutionState>(3)
+        val queueState = ArrayBlockingQueue<ExecutionState>(5)
         val engine = FlowEngine()
 
         val script = Script.from(loadResource("/script-example-async.json"))
@@ -120,13 +120,14 @@ class FlowEngineTest {
         )
 
         val context = script.with(args)
-        engine.run { context }.onAction { node, _, result ->
+        context.onAction { node, _, result ->
             if (node["action"]?.asText() == "waitOnDigits") {
                 queueRequest.offer(objectToNode(result!!))
             }
         }.onStateChange { _, state ->
             queueState.offer(state)
         }
+        engine.run { context }
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service response
@@ -302,5 +303,28 @@ class FlowEngineTest {
 
         assertEquals("hello john, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("exited john with external quit", queue.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun `test sequence iterations within the flow`() {
+
+        val queue = ArrayBlockingQueue<String>(5)
+        val engine = FlowEngine()
+
+        val script = Script.from(loadResource("/script-example-iterate.json"))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+
+        engine.run { script.with(args) }
+        assertEquals("have a good one john", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one mary", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one alice", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("returned from iterations", queue.poll(5, TimeUnit.SECONDS))
     }
 }

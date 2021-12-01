@@ -54,6 +54,8 @@ class Util {
             return node
         }
 
+        fun makeJson(): ObjectNode = mapper.createObjectNode()
+
         fun getId(prefix: String): String = "$prefix-${Random.nextInt(1000000, 9999999)}"
     }
 }

@@ -78,7 +78,9 @@ class ContextTest {
 
         var frame = context.next()
         context.push(threadId, StackFrame.create(frame!!.sequenceId, frame.actionIndex))
-        assertEquals("answer", frame.node["action"]!!.asText())
+        frame = context.next()
+        assertEquals("answer", frame!!.node["action"]!!.asText())
+        context.push(threadId, StackFrame.create(frame!!.sequenceId, frame.actionIndex))
         frame = context.next()
         context.push(threadId, StackFrame.create(frame!!.sequenceId, frame.actionIndex))
         assertEquals("say", frame.node["action"]!!.asText())
