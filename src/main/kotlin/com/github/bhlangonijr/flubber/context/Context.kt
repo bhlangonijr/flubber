@@ -8,7 +8,6 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.script.Script.Companion.MAIN_FLOW_ID
 import com.github.bhlangonijr.flubber.script.SequenceNotFoundException
-import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import java.io.InputStream
 import java.net.URL
 import java.util.*
@@ -25,16 +24,17 @@ class Context private constructor(
         const val SCRIPT_FIELD = "script"
         const val STACK_FIELD = "stack"
         const val GLOBAL_ARGS_FIELD = "args"
+        const val GLOBAL_VARS_FIELD = "vars"
         const val RESULT_FIELD = "result"
         const val ASYNC_FIELD = "async"
         const val STATE_FIELD = "state"
         const val SEQUENCE_ID_FIELD = "sequenceId"
         const val ACTION_ID_FIELD = "actionId"
         const val EXCEPTION_FIELD = "exception"
-        const val REPEAT_FIELD = "repeat"
         const val SEQUENCE_TYPE_FIELD = "sequenceType"
         const val MAX_STACK_SIZE = 50
         const val MAIN_THREAD_ID = "mainThreadId"
+        const val PATH_FIELD = "path"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -60,6 +60,8 @@ class Context private constructor(
             data.with(STATE_FIELD).put(MAIN_THREAD_ID, ExecutionState.NEW.name)
             data.with(GLOBAL_FIELD)
                 .set<ObjectNode>(GLOBAL_ARGS_FIELD, argsJson)
+            data.with(GLOBAL_FIELD)
+                .set<ObjectNode>(GLOBAL_VARS_FIELD, mapper.createObjectNode())
             return Context(data, script)
         }
     }
@@ -69,6 +71,9 @@ class Context private constructor(
 
     val globalArgs: ObjectNode
         get() = data.with(GLOBAL_FIELD).get(GLOBAL_ARGS_FIELD) as ObjectNode
+
+    val globalVars: ObjectNode
+        get() = data.with(GLOBAL_FIELD).get(GLOBAL_VARS_FIELD) as ObjectNode
 
     val state: ObjectNode
         get() = data.with(STATE_FIELD)
@@ -158,18 +163,18 @@ data class StackFrame(val data: ObjectNode) {
         private val mapper = ObjectMapper().registerKotlinModule()
 
         fun create(
+            path: String,
             sequenceId: String,
             actionIndex: Int = -1,
             sequenceType: Boolean = false,
-            args: Map<String, Any?> = Collections.emptyMap(),
-            result: Any? = null,
-            repeat: Int? = 0
+            args: JsonNode = mapper.createObjectNode(),
+            result: Any? = null
         ): StackFrame {
 
             val data = mapper.createObjectNode()
+            data.put(Context.PATH_FIELD, path)
             data.put(Context.SEQUENCE_ID_FIELD, sequenceId)
             data.put(Context.ACTION_ID_FIELD, actionIndex)
-            data.put(Context.REPEAT_FIELD, repeat)
             data.put(Context.SEQUENCE_TYPE_FIELD, sequenceType)
             val frame = StackFrame(data)
             frame.args = args
@@ -178,20 +183,20 @@ data class StackFrame(val data: ObjectNode) {
         }
     }
 
+    val path: String
+        get() = data.get(Context.PATH_FIELD).asText()
+
     val sequence: String
         get() = data.get(Context.SEQUENCE_ID_FIELD).asText()
 
     val actionIndex: Int
         get() = data.get(Context.ACTION_ID_FIELD).asInt()
 
-    val repeat: Int
-        get() = data.get(Context.REPEAT_FIELD).asInt()
-
     val sequenceType: Boolean
         get() = data.get(Context.SEQUENCE_TYPE_FIELD).asBoolean()
 
-    var args: Map<String, Any?>
-        get() = nodeToMap(data.get(Context.GLOBAL_ARGS_FIELD))
+    var args: JsonNode
+        get() = data.get(Context.GLOBAL_ARGS_FIELD)
         set(value) {
             data.set<JsonNode>(Context.GLOBAL_ARGS_FIELD, mapper.valueToTree(value))
         }

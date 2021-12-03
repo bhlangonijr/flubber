@@ -21,12 +21,17 @@ class Util {
 
         fun objectToNode(obj: Any): JsonNode = mapper.valueToTree(obj)
 
-        fun bindVars(args: MutableMap<String, Any?>, globalArgs: JsonNode) {
+        fun bindVars(
+            fullPath: String,
+            args: MutableMap<String, Any?>,
+            globalArgs: JsonNode,
+            replaceBlank: Boolean = false
+        ) {
 
             for (entry in args.entries) {
                 if (entry.value is Map<*, *>) {
                     @Suppress("UNCHECKED_CAST")
-                    bindVars(entry.value as MutableMap<String, Any?>, globalArgs)
+                    bindVars(fullPath, entry.value as MutableMap<String, Any?>, globalArgs)
                 } else if (entry.value is String) {
                     val text = entry.value as String
                     if (text.indexOf("}}") > text.indexOf("{{")) {
@@ -34,10 +39,12 @@ class Util {
                             .filter { it.contains("{{") }
                             .map { it.split("{{")[1] }
                         for (variable in vars) {
-                            val path = variable.replace(".", "/")
+                            val path = "$fullPath$variable".replace(".", "/")
                             val resolved = globalArgs.at("/$path").asText()
                             val newText = args[entry.key] as String
-                            args[entry.key] = newText.replace("{{$variable}}", resolved)
+                            if (resolved.isNotEmpty() || replaceBlank) {
+                                args[entry.key] = newText.replace("{{$variable}}", resolved)
+                            }
                         }
                     }
                 }

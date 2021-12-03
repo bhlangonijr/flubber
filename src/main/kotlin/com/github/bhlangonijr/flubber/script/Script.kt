@@ -36,6 +36,7 @@ class Script private constructor(
         const val RELOAD_FIELD_NAME = "reload"
         const val EXIT_NODE_FIELD_NAME = "exit"
         const val SET_FIELD_NAME = "set"
+        const val SET_LOCAL_FIELD_NAME = "setLocal"
         const val ITERATE_OVER_FIELD_NAME = "iterateOver"
 
         private val mapper = ObjectMapper().registerKotlinModule()

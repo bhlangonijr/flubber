@@ -53,8 +53,8 @@ class ContextTest {
         val script = Script.from(loadResource("/script-example.json"))
         val context = Context.create(script, args)
 
-        context.push(threadId, StackFrame.create("main", 0))
-        context.push(threadId, StackFrame.create("main", 1))
+        context.push(threadId, StackFrame.create("mainThreadId.main", "main", 0))
+        context.push(threadId, StackFrame.create("mainThreadId.main", "main", 1))
 
         assertEquals(2, context.threadStack(threadId).size())
         assertEquals(1, context.pop(threadId)?.actionIndex)
@@ -77,15 +77,15 @@ class ContextTest {
         val context = Context.create(script, args)
 
         var frame = context.next()
-        context.push(threadId, StackFrame.create(frame!!.sequenceId, frame.actionIndex))
+        context.push(threadId, StackFrame.create("mainThreadId.main", frame!!.sequenceId, frame.actionIndex))
         frame = context.next()
         assertEquals("answer", frame!!.node["action"]!!.asText())
-        context.push(threadId, StackFrame.create(frame!!.sequenceId, frame.actionIndex))
+        context.push(threadId, StackFrame.create("mainThreadId.main", frame.sequenceId, frame.actionIndex))
         frame = context.next()
-        context.push(threadId, StackFrame.create(frame!!.sequenceId, frame.actionIndex))
+        context.push(threadId, StackFrame.create("mainThreadId.main", frame!!.sequenceId, frame.actionIndex))
         assertEquals("say", frame.node["action"]!!.asText())
         frame = context.next()
-        context.push(threadId, StackFrame.create(frame!!.sequenceId, frame.actionIndex))
+        context.push(threadId, StackFrame.create("mainThreadId.main", frame!!.sequenceId, frame.actionIndex))
         assertEquals("waitOnDigits", frame.node["action"]!!.asText())
         assertEquals(ExecutionState.RUNNING, context.threadStateValue(MAIN_THREAD_ID))
     }

@@ -33,7 +33,7 @@ class UtilTest {
             )
         )
 
-        Util.bindVars(correctArgs, globalArgs)
+        Util.bindVars("", correctArgs, globalArgs)
 
         assertEquals("hello ben-hur, press 1000 to greet or 2000 to quit.", correctArgs["text"] as String)
 
@@ -45,7 +45,7 @@ class UtilTest {
             )
         )
 
-        Util.bindVars(incorrectArgs, globalArgs)
+        Util.bindVars("", incorrectArgs, globalArgs)
 
         assertEquals(
             "hello {{session.user, press {{option1}} to greet or {option2} to quit.",

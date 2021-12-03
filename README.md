@@ -59,9 +59,9 @@ dependencies {
 
 # Usage
 
-The building blocks of any scripts are the actions. Currently, Javascript and Python actions are supported 
-as long as they implement the expected interface - a simple function having arguments `context` and `args`. These actions
-can be served by any web server as dynamic/static content or as local files, e.g.,
+The building blocks of any scripts are the actions. Currently, Javascript and Python actions are supported as long as
+they implement the expected interface - a simple function having arguments `context` and `args`. These actions can be
+served by any web server as dynamic/static content or as local files, e.g.,
 
 ```javascript
     // hello action. Served by URL: https://localhost:8080/myserver/hello.js
@@ -147,25 +147,25 @@ Some out-of-box actions are available for building basic flows:
 Evaluates a logic expression for conditionally executing sequences.
 
 ```json
-        
-        {
-          "decision": "expression",
-          "args": {
-            "condition": "{{DIGITS}} == '1000'"
-          },
-          "do": {
-            "sequence": "greetAndExit",
-            "args": {
-              "HANGUP_CODE": "normal"
-            }
-          },
-          "else": {
-            "sequence": "exit",
-            "args": {
-              "HANGUP_CODE": "normal"
-            }
-          }
-        }
+
+{
+  "decision": "expression",
+  "args": {
+    "condition": "{{DIGITS}} == '1000'"
+  },
+  "do": {
+    "sequence": "greetAndExit",
+    "args": {
+      "HANGUP_CODE": "normal"
+    }
+  },
+  "else": {
+    "sequence": "exit",
+    "args": {
+      "HANGUP_CODE": "normal"
+    }
+  }
+}
 ```
 
 ## exit
@@ -198,8 +198,7 @@ Executes a sequence, returning to the calling sequence after finished.
 
 ## rest
 
-Call a REST/HTTP endpoint using specified params.
-Available methods: `post`, `put`, `get`, `delete`.
+Call a REST/HTTP endpoint using specified params. Available methods: `post`, `put`, `get`, `delete`.
 
 ```json
 
@@ -233,11 +232,11 @@ The response object contains a HTTP `status` code, `headers` and an optional `bo
 
 ## json
 
-The `json` action aids parsing json strings into structured objects so that it can be easily 
-manipulated by other actions as when you want to extract certain attribute values.
+The `json` action aids parsing json strings into structured objects so that it can be easily manipulated by other
+actions as when you want to extract certain attribute values.
 
-In the example below `body` from the `httpResponse` has been parsed as a JSON object and result
-set to `userProfile`:
+In the example below `body` from the `httpResponse` has been parsed as a JSON object and result set to `userProfile`:
+
 ```json
 
         {

@@ -30,7 +30,6 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import mu.KotlinLogging
-import java.util.*
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -75,6 +74,7 @@ class FlowEngine(
                     context.push(
                         callback.threadId,
                         StackFrame.create(
+                            path = frame.path,
                             sequenceId = frame.sequence,
                             actionIndex = frame.actionIndex,
                             args = frame.args,
@@ -82,8 +82,8 @@ class FlowEngine(
                             sequenceType = false
                         )
                     )
-                    frame.args[SET_FIELD_NAME]?.let { field ->
-                        context.globalArgs.set<JsonNode>(field as String, objectToNode(result))
+                    frame.args[SET_FIELD_NAME]?.asText()?.let { field ->
+                        context.globalVars.set<JsonNode>("${frame.path}$field", objectToNode(result))
                     }
                     context.setThreadState(callback.threadId, ExecutionState.RUNNING)
                     logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
@@ -105,7 +105,7 @@ class FlowEngine(
                     ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
                     ?.let { hooks ->
                         val threadId = getId(event.name ?: "hook")
-                        executeDoElse(hooks.first(), true, context, event.args, Collections.emptyMap(), threadId)
+                        executeDoElse(hooks.first(), true, context, event.args, threadId)
                         context.setThreadState(threadId, ExecutionState.RUNNING)
                         logger.debug { "Script hook calling event ${event.name}" }
                     }
@@ -156,7 +156,6 @@ class FlowEngine(
                                     true,
                                     context,
                                     jsonException(exception),
-                                    Collections.emptyMap(),
                                     threadId
                                 )
                             } else {
@@ -171,23 +170,29 @@ class FlowEngine(
     private fun executeOneStep(context: Context, threadId: String) {
 
         if (context.running(threadId)) {
-            logger.trace { "stack: ${context.stack.toPrettyString()}" }
+            logger.trace {
+                "stack: ${context.stack.toPrettyString()}" +
+                        ", \n vars: ${context.globalVars}" +
+                        ", \n args: ${context.globalArgs}"
+            }
             context.next(threadId)?.let { frame ->
                 logger.trace { "frame: $frame" }
-                //val sequenceArgs = makeJson()
+                val actionPath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
                 if (frame.sequenceType) {
+                    val sequencePath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
                     frame.previousFrame?.let { lastFrame ->
                         val args = objectToNode(lastFrame.args) as ObjectNode
                         args["_elements"]?.takeIf { !it.isEmpty }?.let {
                             val elements = it as ArrayNode
                             val element = elements.remove(0)
-                            context.globalArgs.set<JsonNode>("iterationResult", objectToNode(element))
+                            context.globalVars.set<JsonNode>("${sequencePath}iterationResult", objectToNode(element))
                             if (!elements.isEmpty) {
                                 context.push(
                                     threadId, StackFrame.create(
+                                        path = sequencePath,
                                         sequenceId = frame.sequenceId,
                                         sequenceType = true,
-                                        args = nodeToMap(args)
+                                        args = args
                                     )
                                 )
                             }
@@ -195,6 +200,7 @@ class FlowEngine(
                     }
                     context.push(
                         threadId, StackFrame.create(
+                            path = actionPath,
                             sequenceId = frame.sequenceId
                         )
                     )
@@ -203,37 +209,41 @@ class FlowEngine(
                     val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
                     args[THREAD_ID_FIELD] = threadId
                     val globalArgs = context.globalArgs
-                    bindVars(args, globalArgs)
+                    bindVars("", args, globalArgs)
+                    val globalVars = context.globalVars
+                    bindVars(actionPath, args, globalVars, true)
                     if (args[ASYNC_FIELD] == true) {
                         context.setThreadState(threadId, ExecutionState.WAITING)
                     }
                     val result = executeAction(context, action, args, globalArgs)
                     args[SET_FIELD_NAME]?.let { field ->
                         result?.let {
-                            globalArgs.set<JsonNode>(field as String, objectToNode(result))
+                            val fullPath = "$actionPath$field"
+                            globalVars.set<JsonNode>(fullPath, objectToNode(result))
                         }
                     }
-                    val iterateOverNode = nodeToMap(args[ITERATE_OVER_FIELD_NAME]?.let {
-                        val path = it.toString().replace(".", "/")
-                        val node = globalArgs.at("/$path")
+                    val iterateOverNode = args[ITERATE_OVER_FIELD_NAME]?.let {
+                        val path = "$actionPath$it".replace(".", "/")
+                        val node = globalVars.at("/$path")
                         val newNode = makeJson()
                         when (node) {
                             is ArrayNode -> newNode.putArray("_elements").addAll(node)
                             else -> newNode.putArray("_elements").add(node)
                         }
                         newNode
-                    } ?: EMPTY_OBJECT)
+                    } ?: EMPTY_OBJECT
                     context.push(
                         threadId, StackFrame.create(
+                            path = actionPath,
                             sequenceId = frame.sequenceId,
                             actionIndex = frame.actionIndex,
-                            args = args,
+                            args = objectToNode(args),
                             result = result
                         )
                     )
                     when {
                         result is Boolean ->
-                            executeDoElse(action, result, context, null, iterateOverNode, threadId)
+                            executeDoElse(action, result, context, null, threadId, actionPath, iterateOverNode)
                         result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
                             context.setThreadState(threadId, ExecutionState.FINISHED)
                     }
@@ -270,8 +280,9 @@ class FlowEngine(
         result: Boolean,
         context: Context,
         blockArgs: JsonNode? = null,
-        iterateOverMap: MutableMap<String, Any?> = Collections.emptyMap(),
-        threadId: String
+        threadId: String,
+        path: String? = null,
+        iterateOverMap: JsonNode = makeJson()
     ) {
 
         when {
@@ -281,21 +292,26 @@ class FlowEngine(
             !result && action.hasNonNull(ELSE_FIELD_NAME) -> action.get(ELSE_FIELD_NAME)
             else -> null
         }?.let { block ->
-            val sequence = block.get(SEQUENCE_FIELD_NAME)?.asText()
-            val args = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
-            blockArgs?.let { bindVars(args, it) }
-            val globalArgs = context.globalArgs
-            bindVars(args, globalArgs)
-            globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
-            sequence?.let {
-                context.push(
-                    threadId, StackFrame.create(
-                        sequenceId = it,
-                        sequenceType = true,
-                        args = iterateOverMap
+            block.get(SEQUENCE_FIELD_NAME)?.asText()
+                ?.let { sequenceId ->
+                    val initialPath = "$threadId-$sequenceId-"
+                    val args = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
+                    blockArgs?.let { bindVars("", args, it) }
+                    val globalArgs = context.globalArgs
+                    bindVars("", args, globalArgs)
+                    val globalVars = context.globalVars
+                    println("${path ?: initialPath} - $args - $globalVars")
+                    bindVars(path ?: initialPath, args, globalVars, true)
+                    globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
+                    context.push(
+                        threadId, StackFrame.create(
+                            path = path?.let { "$it$sequenceId-" } ?: initialPath,
+                            sequenceId = sequenceId,
+                            sequenceType = true,
+                            args = iterateOverMap
+                        )
                     )
-                )
-            }
+                }
         }
     }
 }
