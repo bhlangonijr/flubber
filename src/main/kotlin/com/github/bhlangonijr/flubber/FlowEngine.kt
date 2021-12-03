@@ -5,12 +5,15 @@ import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.Callback.Companion.THREAD_ID_FIELD
 import com.github.bhlangonijr.flubber.Event.Companion.EVENT_NAME_FIELD
+import com.github.bhlangonijr.flubber.action.ForEachResult
 import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.Context.Companion.ASYNC_FIELD
+import com.github.bhlangonijr.flubber.context.Context.Companion.ELEMENTS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.EMPTY_OBJECT
 import com.github.bhlangonijr.flubber.context.Context.Companion.GLOBAL_ARGS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAX_STACK_SIZE
+import com.github.bhlangonijr.flubber.context.Context.Companion.PATH_FIELD
 import com.github.bhlangonijr.flubber.context.ExecutionState
 import com.github.bhlangonijr.flubber.context.StackFrame
 import com.github.bhlangonijr.flubber.script.*
@@ -19,9 +22,11 @@ import com.github.bhlangonijr.flubber.script.Script.Companion.DECISION_FIELD_NAM
 import com.github.bhlangonijr.flubber.script.Script.Companion.DO_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ELSE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.EXIT_NODE_FIELD_NAME
-import com.github.bhlangonijr.flubber.script.Script.Companion.ITERATE_OVER_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.ITERATION_RESULT_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SEQUENCE_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.SET_ELEMENT_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.SET_GLOBAL_FIELD_NAME
 import com.github.bhlangonijr.flubber.util.NamedThreadFactory
 import com.github.bhlangonijr.flubber.util.Util.Companion.bindVars
 import com.github.bhlangonijr.flubber.util.Util.Companion.getId
@@ -82,8 +87,12 @@ class FlowEngine(
                             sequenceType = false
                         )
                     )
+                    val objectResult = objectToNode(result)
                     frame.args[SET_FIELD_NAME]?.asText()?.let { field ->
-                        context.globalVars.set<JsonNode>("${frame.path}$field", objectToNode(result))
+                        context.globalArgs.set<JsonNode>("${frame.path}$field", objectResult)
+                    }
+                    frame.args[SET_GLOBAL_FIELD_NAME]?.asText()?.let { field ->
+                        context.globalArgs.set<JsonNode>(field, objectResult)
                     }
                     context.setThreadState(callback.threadId, ExecutionState.RUNNING)
                     logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
@@ -172,7 +181,6 @@ class FlowEngine(
         if (context.running(threadId)) {
             logger.trace {
                 "stack: ${context.stack.toPrettyString()}" +
-                        ", \n vars: ${context.globalVars}" +
                         ", \n args: ${context.globalArgs}"
             }
             context.next(threadId)?.let { frame ->
@@ -182,10 +190,11 @@ class FlowEngine(
                     val sequencePath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
                     frame.previousFrame?.let { lastFrame ->
                         val args = objectToNode(lastFrame.args) as ObjectNode
-                        args["_elements"]?.takeIf { !it.isEmpty }?.let {
+                        args[ELEMENTS_FIELD]?.takeIf { !it.isEmpty }?.let {
+                            val setField = args[SET_ELEMENT_FIELD_NAME]?.asText() ?: ITERATION_RESULT_FIELD_NAME
                             val elements = it as ArrayNode
                             val element = elements.remove(0)
-                            context.globalVars.set<JsonNode>("${sequencePath}iterationResult", objectToNode(element))
+                            context.globalArgs.set<JsonNode>("${sequencePath}$setField", objectToNode(element))
                             if (!elements.isEmpty) {
                                 context.push(
                                     threadId, StackFrame.create(
@@ -208,30 +217,23 @@ class FlowEngine(
                     val action = frame.node
                     val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
                     args[THREAD_ID_FIELD] = threadId
+                    args[PATH_FIELD] = actionPath
                     val globalArgs = context.globalArgs
                     bindVars("", args, globalArgs)
-                    val globalVars = context.globalVars
-                    bindVars(actionPath, args, globalVars, true)
+                    bindVars(actionPath, args, globalArgs, true)
                     if (args[ASYNC_FIELD] == true) {
                         context.setThreadState(threadId, ExecutionState.WAITING)
                     }
                     val result = executeAction(context, action, args, globalArgs)
-                    args[SET_FIELD_NAME]?.let { field ->
-                        result?.let {
+                    result?.let {
+                        args[SET_FIELD_NAME]?.let { field ->
                             val fullPath = "$actionPath$field"
-                            globalVars.set<JsonNode>(fullPath, objectToNode(result))
+                            globalArgs.set<JsonNode>(fullPath, objectToNode(result))
+                        }
+                        args[SET_GLOBAL_FIELD_NAME]?.let { field ->
+                            globalArgs.set<JsonNode>("$field", objectToNode(result))
                         }
                     }
-                    val iterateOverNode = args[ITERATE_OVER_FIELD_NAME]?.let {
-                        val path = "$actionPath$it".replace(".", "/")
-                        val node = globalVars.at("/$path")
-                        val newNode = makeJson()
-                        when (node) {
-                            is ArrayNode -> newNode.putArray("_elements").addAll(node)
-                            else -> newNode.putArray("_elements").add(node)
-                        }
-                        newNode
-                    } ?: EMPTY_OBJECT
                     context.push(
                         threadId, StackFrame.create(
                             path = actionPath,
@@ -243,7 +245,9 @@ class FlowEngine(
                     )
                     when {
                         result is Boolean ->
-                            executeDoElse(action, result, context, null, threadId, actionPath, iterateOverNode)
+                            executeDoElse(action, result, context, null, threadId, actionPath)
+                        result is ForEachResult ->
+                            executeDoElse(action, true, context, null, threadId, actionPath, result.elementsNode)
                         result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
                             context.setThreadState(threadId, ExecutionState.FINISHED)
                     }
@@ -299,9 +303,7 @@ class FlowEngine(
                     blockArgs?.let { bindVars("", args, it) }
                     val globalArgs = context.globalArgs
                     bindVars("", args, globalArgs)
-                    val globalVars = context.globalVars
-                    println("${path ?: initialPath} - $args - $globalVars")
-                    bindVars(path ?: initialPath, args, globalVars, true)
+                    bindVars(path ?: initialPath, args, globalArgs, true)
                     globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
                     context.push(
                         threadId, StackFrame.create(

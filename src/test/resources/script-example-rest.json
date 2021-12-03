@@ -14,7 +14,14 @@
           "args": {
             "url": "{{session.url}}",
             "method": "get",
-            "set": "responseGet"
+            "setGlobal": "responseGet"
+          }
+        },
+        {
+          "action": "json",
+          "args": {
+            "text": "{{responseGet.body}}",
+            "set": "getObject"
           }
         },
         {
@@ -31,7 +38,7 @@
           "action": "json",
           "args": {
             "text": "{{responsePost.body}}",
-            "set": "bot"
+            "set": "postObject"
           }
         },
         {
@@ -45,7 +52,7 @@
         {
           "action": "say",
           "args": {
-            "text": "Bot name: {{bot.name}}"
+            "text": "Bot name: {{postObject.name}} {{getObject.name}}"
           }
         }
       ]

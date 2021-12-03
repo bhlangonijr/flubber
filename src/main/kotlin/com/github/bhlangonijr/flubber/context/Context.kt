@@ -24,7 +24,6 @@ class Context private constructor(
         const val SCRIPT_FIELD = "script"
         const val STACK_FIELD = "stack"
         const val GLOBAL_ARGS_FIELD = "args"
-        const val GLOBAL_VARS_FIELD = "vars"
         const val RESULT_FIELD = "result"
         const val ASYNC_FIELD = "async"
         const val STATE_FIELD = "state"
@@ -32,6 +31,7 @@ class Context private constructor(
         const val ACTION_ID_FIELD = "actionId"
         const val EXCEPTION_FIELD = "exception"
         const val SEQUENCE_TYPE_FIELD = "sequenceType"
+        const val ELEMENTS_FIELD = "_elements"
         const val MAX_STACK_SIZE = 50
         const val MAIN_THREAD_ID = "mainThreadId"
         const val PATH_FIELD = "path"
@@ -60,8 +60,6 @@ class Context private constructor(
             data.with(STATE_FIELD).put(MAIN_THREAD_ID, ExecutionState.NEW.name)
             data.with(GLOBAL_FIELD)
                 .set<ObjectNode>(GLOBAL_ARGS_FIELD, argsJson)
-            data.with(GLOBAL_FIELD)
-                .set<ObjectNode>(GLOBAL_VARS_FIELD, mapper.createObjectNode())
             return Context(data, script)
         }
     }
@@ -71,9 +69,6 @@ class Context private constructor(
 
     val globalArgs: ObjectNode
         get() = data.with(GLOBAL_FIELD).get(GLOBAL_ARGS_FIELD) as ObjectNode
-
-    val globalVars: ObjectNode
-        get() = data.with(GLOBAL_FIELD).get(GLOBAL_VARS_FIELD) as ObjectNode
 
     val state: ObjectNode
         get() = data.with(STATE_FIELD)

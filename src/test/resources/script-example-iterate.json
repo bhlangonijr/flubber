@@ -1,5 +1,5 @@
 {
-  "id": "simple-call-flow",
+  "id": "simple-chat-flow",
   "author": {
     "name": "Ben-Hur",
     "e-mail": "bhlangonijr@gmail.com"
@@ -17,15 +17,13 @@
           }
         },
         {
-          "action": "run",
+          "action": "forEach",
           "args": {
-            "iterateOver": "object.users"
+            "iterateOver": "object.users",
+            "setElement": "forEachElement"
           },
           "do": {
-            "sequence": "greet",
-            "args": {
-              "username": "{{iterationResult.username}}"
-            }
+            "sequence": "greet"
           }
         },
         {
@@ -42,7 +40,7 @@
         {
           "action": "say",
           "args": {
-            "text": "have a good one {{iterationResult.username}}"
+            "text": "have a good one {{forEachElement.username}}"
           }
         }
       ]
