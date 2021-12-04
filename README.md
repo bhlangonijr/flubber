@@ -286,7 +286,7 @@ JSON to JSON transformation is possible by specifying [jolt specs](https://githu
 input json:
 
 ```json
-    {
+{
   "users": [
     {
       "username": "john"
@@ -305,7 +305,7 @@ input json:
 output json by using the transformation spec:
 
 ```json
-    {
+{
   "usernames": [
     "john",
     "mary",
