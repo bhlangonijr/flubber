@@ -168,6 +168,21 @@ Evaluates a logic expression for conditionally executing sequences.
 }
 ```
 
+Alternatively, it can be used to evaluate arbitrary javascript statements.
+
+```json
+
+{
+  "action": "expression",
+  "args": {
+    "text": "\"{{DIGITS}}\".substring(0, 4)",
+    "set": "firstDigits"
+  }
+}
+```
+
+The attribute `set` instructs the engine to store the result of the expression in the variable `firstDigits`.
+
 ## exit
 
 Halts execution of a script.
@@ -250,3 +265,45 @@ In the example below `body` from the `httpResponse` has been parsed as a JSON ob
 
 The field values can be resolved using mustaches further on `{{userProfile.name}}`.
 
+### json specs
+
+JSON to JSON transformation is possible by specifying [jolt specs](https://github.com/bazaarvoice/jolt).
+
+```json
+
+        {
+          "action": "json",
+          "args": {
+            "text": "{\"users\":[{\"username\":\"john\"},{\"username\":\"mary\"},{\"username\":\"alice\"}]}",
+            "spec": "[{\"operation\": \"shift\",\"spec\":\"users\": {\"*\": {\"username\": \"usernames\"}}}}]",
+            "set": "userProfile"
+          }
+        }
+```
+
+input json:
+
+```json
+    {
+      "users":[
+        {
+          "username":"john"
+        },
+        {
+          "username":"mary"
+        },
+        {
+          "username":"alice"
+        }
+      ]
+    }
+
+```
+
+output json by using the transformation spec:
+
+```json
+    {
+      "usernames" : [ "john", "mary", "alice" ]
+    }
+```
