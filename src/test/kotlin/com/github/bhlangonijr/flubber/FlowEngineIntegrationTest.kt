@@ -69,7 +69,7 @@ class FlowEngineIntegrationTest {
         }
         val ctx = scriptWithRest.with(args)
         engine.run { ctx }
-        assertTrue(queue.poll(5, TimeUnit.SECONDS) == "Bot name: john")
+        assertTrue(queue.poll(5, TimeUnit.SECONDS) == "Bot name: john typicode")
     }
 
 }

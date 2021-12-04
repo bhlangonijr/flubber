@@ -13,11 +13,11 @@ class ExpressionAction(
         ScriptEngineManager().getEngineByName("javascript")
 ) : Action {
 
-    override fun execute(context: JsonNode, args: Map<String, Any?>): Boolean {
+    override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
 
-        val condition = args["condition"]
-        engine.eval("var decision = function(context, args) { return ($condition) }")
+        val condition = args["condition"] ?: args["text"]
+        engine.eval("var expression = function(context, args) { return ($condition) }")
         val invocable = engine as Invocable
-        return invocable.invokeFunction("decision", context, args) as Boolean
+        return invocable.invokeFunction("expression", context, args)
     }
 }

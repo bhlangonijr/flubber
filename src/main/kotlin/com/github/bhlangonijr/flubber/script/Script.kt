@@ -36,6 +36,10 @@ class Script private constructor(
         const val RELOAD_FIELD_NAME = "reload"
         const val EXIT_NODE_FIELD_NAME = "exit"
         const val SET_FIELD_NAME = "set"
+        const val SET_GLOBAL_FIELD_NAME = "setGlobal"
+        const val SET_ELEMENT_FIELD_NAME = "setElement"
+        const val ITERATION_RESULT_FIELD_NAME = "iterationResult"
+        const val ITERATE_OVER_FIELD_NAME = "iterateOver"
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -66,6 +70,7 @@ class Script private constructor(
             result.register("run", RunAction())
             result.register("rest", RestAction())
             result.register("json", ParseJsonAction())
+            result.register("forEach", ForEachAction())
             result.loadImports()
             return result
         }

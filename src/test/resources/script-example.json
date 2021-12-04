@@ -11,7 +11,10 @@
       "sequence": [
         {
           "id": "initial.answer",
-          "action": "answer"
+          "action": "answer",
+          "args": {
+            "setGlobal": "hello {{session.user}}, press 1000 to greet or 2000 to quit."
+          }
         },
         {
           "action": "say",

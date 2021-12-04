@@ -1,5 +1,5 @@
 group 'com.github.bhlangonijr'
-version '0.3.5'
+version '0.3.7'
 
 buildscript {
     ext.kotlin_version = '1.5.10'
@@ -31,6 +31,8 @@ dependencies {
     implementation "io.github.microutils:kotlin-logging:1.8.3"
     implementation "org.slf4j:slf4j-api:1.7.30"
     implementation "org.slf4j:slf4j-simple:1.7.30"
+    implementation "com.bazaarvoice.jolt:jolt-core:0.1.5"
+    implementation "com.bazaarvoice.jolt:json-utils:0.1.5"
 
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.1.1"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.1.1"
