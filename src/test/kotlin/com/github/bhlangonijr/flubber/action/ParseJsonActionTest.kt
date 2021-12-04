@@ -55,11 +55,11 @@ class ParseJsonActionTest {
 
     @Test
     fun `test json object parsing using transformation spec`() {
-        
+
         val action = ParseJsonAction()
 
         val result = objectToNode(action.execute(context, mutableMapOf(Pair("text", json), Pair("spec", spec))))
-        
+
         assertEquals("john", result["usernames"][0].asText())
         assertEquals("mary", result["usernames"][1].asText())
         assertEquals("alice", result["usernames"][2].asText())

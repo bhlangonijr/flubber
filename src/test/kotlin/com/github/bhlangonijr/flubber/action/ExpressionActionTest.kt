@@ -32,8 +32,11 @@ class ExpressionActionTest {
         val expression = ExpressionAction()
 
         assertEquals("TEST", expression.execute(context, mutableMapOf(Pair("text", "\"TEST_REMOVE\".substring(0, 4)"))))
-        assertEquals("TEST_REPLACE", expression.execute(context,
-            mutableMapOf(Pair("text", "\"TEST_REMOVE\".replace(\"REMOVE\", \"REPLACE\")")))
+        assertEquals(
+            "TEST_REPLACE", expression.execute(
+                context,
+                mutableMapOf(Pair("text", "\"TEST_REMOVE\".replace(\"REMOVE\", \"REPLACE\")"))
+            )
         )
     }
 

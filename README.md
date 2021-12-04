@@ -23,20 +23,22 @@ Flubber dependency can be added via the jitpack repository.
 ## Maven
 
 ```xml
+
 <repositories>
-  ...
-  <repository>
-    <id>jitpack.io</id>
-    <url>https://jitpack.io</url>
-  </repository>
+    ...
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
 </repositories>
 ```
 
 ```xml
+
 <dependency>
-  <groupId>com.github.bhlangonijr</groupId>
-  <artifactId>flubber</artifactId>
-  <version>0.3.5</version>
+    <groupId>com.github.bhlangonijr</groupId>
+    <artifactId>flubber</artifactId>
+    <version>0.3.5</version>
 </dependency>
 ```
 
@@ -189,9 +191,9 @@ Halts execution of a script.
 
 ```json
 
-        {
-          "action": "exit"
-        }
+{
+  "action": "exit"
+}
 ```
 
 ## run
@@ -200,15 +202,15 @@ Executes a sequence, returning to the calling sequence after finished.
 
 ```json
 
-        {
-          "action": "run",
-          "do": {
-            "sequence": "greet",
-            "args": {
-              "greet_type": "normal"
-            }
-          }
-        }
+{
+  "action": "run",
+  "do": {
+    "sequence": "greet",
+    "args": {
+      "greet_type": "normal"
+    }
+  }
+}
 ```
 
 ## rest
@@ -217,32 +219,32 @@ Call a REST/HTTP endpoint using specified params. Available methods: `post`, `pu
 
 ```json
 
-        {
-          "action": "rest",
-          "args": {
-            "url": "https://exampleserver/api/user",
-            "method": "post",
-            "body": "{\"name\": \"{{session.user}}\"}",
-            "headers": "{\"Content-Type\": \"application/json\", \"Accept\": \"*/*\"}",
-            "set": "httResponse"
-          }
-        }
+{
+  "action": "rest",
+  "args": {
+    "url": "https://exampleserver/api/user",
+    "method": "post",
+    "body": "{\"name\": \"{{session.user}}\"}",
+    "headers": "{\"Content-Type\": \"application/json\", \"Accept\": \"*/*\"}",
+    "set": "httResponse"
+  }
+}
 ```
 
 The response object contains a HTTP `status` code, `headers` and an optional `body`, e.g.,
 
 ```json
 
-        {
-          "status": "200",
-          "body": {
-            "result": "OK"
-          },
-          "headers": {
-            "content-length": 20,
-            "content-type": "application/json; charset=utf-8"
-          }
-        }
+{
+  "status": "200",
+  "body": {
+    "result": "OK"
+  },
+  "headers": {
+    "content-length": 20,
+    "content-type": "application/json; charset=utf-8"
+  }
+}
 ```
 
 ## json
@@ -254,13 +256,13 @@ In the example below `body` from the `httpResponse` has been parsed as a JSON ob
 
 ```json
 
-        {
-          "action": "json",
-          "args": {
-            "text": "{{httResponse.body}}",
-            "set": "userProfile"
-          }
-        }
+{
+  "action": "json",
+  "args": {
+    "text": "{{httResponse.body}}",
+    "set": "userProfile"
+  }
+}
 ```
 
 The field values can be resolved using mustaches further on `{{userProfile.name}}`.
@@ -271,32 +273,32 @@ JSON to JSON transformation is possible by specifying [jolt specs](https://githu
 
 ```json
 
-        {
-          "action": "json",
-          "args": {
-            "text": "{\"users\":[{\"username\":\"john\"},{\"username\":\"mary\"},{\"username\":\"alice\"}]}",
-            "spec": "[{\"operation\": \"shift\",\"spec\":\"users\": {\"*\": {\"username\": \"usernames\"}}}}]",
-            "set": "userProfile"
-          }
-        }
+{
+  "action": "json",
+  "args": {
+    "text": "{\"users\":[{\"username\":\"john\"},{\"username\":\"mary\"},{\"username\":\"alice\"}]}",
+    "spec": "[{\"operation\": \"shift\",\"spec\":\"users\": {\"*\": {\"username\": \"usernames\"}}}}]",
+    "set": "userProfile"
+  }
+}
 ```
 
 input json:
 
 ```json
     {
-      "users":[
-        {
-          "username":"john"
-        },
-        {
-          "username":"mary"
-        },
-        {
-          "username":"alice"
-        }
-      ]
+  "users": [
+    {
+      "username": "john"
+    },
+    {
+      "username": "mary"
+    },
+    {
+      "username": "alice"
     }
+  ]
+}
 
 ```
 
@@ -304,6 +306,10 @@ output json by using the transformation spec:
 
 ```json
     {
-      "usernames" : [ "john", "mary", "alice" ]
-    }
+  "usernames": [
+    "john",
+    "mary",
+    "alice"
+  ]
+}
 ```
