@@ -44,18 +44,18 @@
         {
           "decision": "expression",
           "args": {
-            "condition": "{{DIGITS}} == '1000'"
-          },
-          "do": {
-            "sequence": "greetAndExit",
-            "args": {
-              "HANGUP_CODE": "normal"
-            }
-          },
-          "else": {
-            "sequence": "exit",
-            "args": {
-              "HANGUP_CODE": "normal"
+            "condition": "{{DIGITS}} == '1000'",
+            "do": {
+              "sequence": "greetAndExit",
+              "args": {
+                "HANGUP_CODE": "normal"
+              }
+            },
+            "else": {
+              "sequence": "exit",
+              "args": {
+                "HANGUP_CODE": "normal"
+              }
             }
           }
         },
@@ -122,19 +122,24 @@
   "hooks": [
     {
       "event": "hangup",
-      "do": {
-        "sequence": "exit",
-        "args": {
-          "HANGUP_CODE": "{{event.code}}"
+      "args": {
+        "do": {
+          "sequence": "exit",
+          "args": {
+            "HANGUP_CODE": "{{event.code}}"
+          }
         }
       }
     }
   ],
   "exceptionally": {
-    "do": {
-      "sequence": "exitWithError",
-      "args": {
-        "ERROR": "{{exception.message}}"
+    "action": "run",
+    "args": {
+      "do": {
+        "sequence": "exitWithError",
+        "args": {
+          "ERROR": "{{exception.message}}"
+        }
       }
     }
   }

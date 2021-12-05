@@ -7,6 +7,7 @@ import javax.script.ScriptEngineManager
 
 /**
  * Executes de do-else block depending on the result of the expression
+ * Alternatively evaluates an arbitrary javascript expression
  */
 class ExpressionAction(
     private val engine: ScriptEngine =

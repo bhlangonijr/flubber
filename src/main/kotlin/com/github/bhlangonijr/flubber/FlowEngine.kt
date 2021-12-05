@@ -288,18 +288,18 @@ class FlowEngine(
         path: String? = null,
         iterateOverMap: JsonNode = makeJson()
     ) {
-
+        val actionArgs = action.get(GLOBAL_ARGS_FIELD)
         when {
             context.threadStack(threadId).size() > MAX_STACK_SIZE ->
                 throw ScriptStackOverflowException("Script stack overflow")
-            result && action.hasNonNull(DO_FIELD_NAME) -> action.get(DO_FIELD_NAME)
-            !result && action.hasNonNull(ELSE_FIELD_NAME) -> action.get(ELSE_FIELD_NAME)
-            else -> null
-        }?.let { block ->
-            block.get(SEQUENCE_FIELD_NAME)?.asText()
+            result && actionArgs?.hasNonNull(DO_FIELD_NAME) == true -> actionArgs.get(DO_FIELD_NAME)
+            !result && actionArgs?.hasNonNull(ELSE_FIELD_NAME) == true -> actionArgs.get(ELSE_FIELD_NAME)
+            else -> throw ScriptStateException("Can't find a sequence to execute")
+        }?.let { sequence ->
+            sequence.get(SEQUENCE_FIELD_NAME)?.asText()
                 ?.let { sequenceId ->
                     val initialPath = "$threadId-$sequenceId-"
-                    val args = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
+                    val args = nodeToMap(sequence.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
                     blockArgs?.let { bindVars("", args, it) }
                     val globalArgs = context.globalArgs
                     bindVars("", args, globalArgs)

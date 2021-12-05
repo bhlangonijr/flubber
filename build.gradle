@@ -1,5 +1,5 @@
 group 'com.github.bhlangonijr'
-version '0.3.7'
+version '0.3.9'
 
 buildscript {
     ext.kotlin_version = '1.5.10'

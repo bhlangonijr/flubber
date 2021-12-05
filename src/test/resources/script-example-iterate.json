@@ -20,10 +20,10 @@
           "action": "forEach",
           "args": {
             "iterateOver": "object.users",
-            "setElement": "forEachElement"
-          },
-          "do": {
-            "sequence": "greet"
+            "setElement": "forEachElement",
+            "do": {
+              "sequence": "greet"
+            }
           }
         },
         {

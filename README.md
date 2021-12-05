@@ -38,7 +38,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
-    <version>0.3.7</version>
+    <version>0.3.9</version>
 </dependency>
 ```
 
@@ -54,7 +54,7 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.3.7'
+    implementation 'com.github.bhlangonijr:flubber:0.3.9'
     ...
 }
 ```
@@ -66,10 +66,10 @@ they implement the expected interface - a simple function having arguments `cont
 served by any web server as dynamic/static content or as local files, e.g.,
 
 ```javascript
-    // hello action. Served by URL: https://localhost:8080/myserver/hello.js
-    var action = function(context, args) {
-        return "HELLO: " + args["user"]
-    }
+// hello action. Served by URL: https://localhost:8080/myserver/hello.js
+var action = function(context, args) {
+    return "HELLO: " + args["user"]
+}
 ```  
 
 ## Scripting a Hello World DSL
@@ -113,10 +113,13 @@ served by any web server as dynamic/static content or as local files, e.g.,
     }
   ],
   "exceptionally": {
-    "do": {
-      "sequence": "exitWithError",
-      "args": {
-        "ERROR": "{{exception.message}}"
+    "action": "run",
+    "args": {
+      "do": {
+        "sequence": "exitWithError",
+        "args": {
+          "ERROR": "{{exception.message}}"
+        }
       }
     }
   }
@@ -153,18 +156,18 @@ Evaluates a logic expression for conditionally executing sequences.
 {
   "decision": "expression",
   "args": {
-    "condition": "{{DIGITS}} == '1000'"
-  },
-  "do": {
-    "sequence": "greetAndExit",
-    "args": {
-      "HANGUP_CODE": "normal"
-    }
-  },
-  "else": {
-    "sequence": "exit",
-    "args": {
-      "HANGUP_CODE": "normal"
+    "condition": "{{DIGITS}} == '1000'",
+    "do": {
+      "sequence": "greetAndExit",
+      "args": {
+        "HANGUP_CODE": "normal"
+      }
+    },
+    "else": {
+      "sequence": "exit",
+      "args": {
+        "HANGUP_CODE": "normal"
+      }
     }
   }
 }
@@ -204,10 +207,12 @@ Executes a sequence, returning to the calling sequence after finished.
 
 {
   "action": "run",
-  "do": {
-    "sequence": "greet",
-    "args": {
-      "greet_type": "normal"
+  "args": {
+    "do": {
+      "sequence": "greet",
+      "args": {
+        "greet_type": "normal"
+      }
     }
   }
 }
@@ -311,5 +316,22 @@ output json by using the transformation spec:
     "mary",
     "alice"
   ]
+}
+```
+
+## forEach
+
+Iterates over a JSON array by calling a specified sequence for each of its elements.
+
+```json
+{
+  "action": "forEach",
+  "args": {
+    "iterateOver": "object.users",
+    "setElement": "forEachElement",
+    "do": {
+      "sequence": "greet"
+    }
+  }
 }
 ```

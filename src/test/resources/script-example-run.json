@@ -17,10 +17,12 @@
         },
         {
           "action": "run",
-          "do": {
-            "sequence": "greet",
-            "args": {
-              "full_name": "{{session.user}} doe"
+          "args": {
+            "do": {
+              "sequence": "greet",
+              "args": {
+                "full_name": "{{session.user}} doe"
+              }
             }
           }
         },
