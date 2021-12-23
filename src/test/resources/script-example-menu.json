@@ -1,0 +1,112 @@
+{
+  "id": "simple-chat-flow",
+  "author": {
+    "name": "Ben-Hur",
+    "e-mail": "bhlangonijr@gmail.com"
+  },
+  "_comment": "sample script for choosing a path in a multi selection option",
+  "flow": [
+    {
+      "id": "main",
+      "sequence": [
+        {
+          "action": "json",
+          "args": {
+            "text": "{\"users\":[{\"username\":\"john\"},{\"username\":\"mary\"},{\"username\":\"alice\"}]}",
+            "set": "object"
+          }
+        },
+        {
+          "action": "expression",
+          "args": {
+            "text": "\"{{object.users.0.username}}\"",
+            "set": "username"
+          }
+        },
+        {
+          "action": "menu",
+          "args": {
+            "text": "{{username}}",
+            "options": [
+              {
+                "code": "1",
+                "similar": ["john"],
+                "do": {
+                  "sequence": "hello",
+                  "args": {
+                    "username": "{{username}}"
+                  }
+                }
+              },
+              {
+                "code": "2",
+                "similar": ["mary"],
+                "do": {
+                  "sequence": "hi",
+                  "args": {
+                    "username": "{{username}}"
+                  }
+                }
+              },
+              {
+                "code": "3",
+                "similar": ["alice"],
+                "do": {
+                  "sequence": "hi",
+                  "args": {
+                    "username": "{{username}}"
+                  }
+                }
+              }
+            ],
+            "else": {
+              "sequence": "none",
+              "args": {
+                "username": "none selected"
+              }
+            }
+          }
+        },
+        {
+          "action": "say",
+          "args": {
+            "text": "returned from menu"
+          }
+        }
+      ]
+    },
+    {
+      "id": "hello",
+      "sequence": [
+        {
+          "action": "say",
+          "args": {
+            "text": "hello {{username}}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "hi",
+      "sequence": [
+        {
+          "action": "say",
+          "args": {
+            "text": "hi {{username}}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "none",
+      "sequence": [
+        {
+          "action": "say",
+          "args": {
+            "text": "oops {{username}}"
+          }
+        }
+      ]
+    }
+  ]
+}
