@@ -16,8 +16,8 @@ class ExpressionAction(
 
     override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
 
-        val condition = args["condition"] ?: args["text"]
-        engine.eval("var expression = function(context, args) { return ($condition) }")
+        val expression = args["condition"] ?: args["text"]
+        engine.eval("var expression = function(context, args) { return ($expression) }")
         val invocable = engine as Invocable
         return invocable.invokeFunction("expression", context, args)
     }

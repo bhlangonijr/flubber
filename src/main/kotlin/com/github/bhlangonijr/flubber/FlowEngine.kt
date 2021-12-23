@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.Callback.Companion.THREAD_ID_FIELD
 import com.github.bhlangonijr.flubber.Event.Companion.EVENT_NAME_FIELD
 import com.github.bhlangonijr.flubber.action.ForEachResult
+import com.github.bhlangonijr.flubber.action.MenuResult
 import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.Context.Companion.ASYNC_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.ELEMENTS_FIELD
@@ -248,6 +249,8 @@ class FlowEngine(
                             executeDoElse(action, result, context, null, threadId, actionPath)
                         result is ForEachResult ->
                             executeDoElse(action, true, context, null, threadId, actionPath, result.elementsNode)
+                        result is MenuResult ->
+                            executeDoElse(result.sequence, result.result, context, null, threadId, actionPath)
                         result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
                             context.setThreadState(threadId, ExecutionState.FINISHED)
                     }
@@ -288,32 +291,31 @@ class FlowEngine(
         path: String? = null,
         iterateOverMap: JsonNode = makeJson()
     ) {
-        val actionArgs = action.get(GLOBAL_ARGS_FIELD)
+        val actionArgs = action.get(GLOBAL_ARGS_FIELD) ?: action
         when {
             context.threadStack(threadId).size() > MAX_STACK_SIZE ->
                 throw ScriptStackOverflowException("Script stack overflow")
-            result && actionArgs?.hasNonNull(DO_FIELD_NAME) == true -> actionArgs.get(DO_FIELD_NAME)
-            !result && actionArgs?.hasNonNull(ELSE_FIELD_NAME) == true -> actionArgs.get(ELSE_FIELD_NAME)
+            result && actionArgs.hasNonNull(DO_FIELD_NAME) -> actionArgs.get(DO_FIELD_NAME)
+            !result && actionArgs.hasNonNull(ELSE_FIELD_NAME) -> actionArgs.get(ELSE_FIELD_NAME)
             else -> throw ScriptStateException("Can't find a sequence to execute")
-        }?.let { sequence ->
-            sequence.get(SEQUENCE_FIELD_NAME)?.asText()
-                ?.let { sequenceId ->
-                    val initialPath = "$threadId-$sequenceId-"
-                    val args = nodeToMap(sequence.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
-                    blockArgs?.let { bindVars("", args, it) }
-                    val globalArgs = context.globalArgs
-                    bindVars("", args, globalArgs)
-                    bindVars(path ?: initialPath, args, globalArgs, true)
-                    globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
-                    context.push(
-                        threadId, StackFrame.create(
-                            path = path?.let { "$it$sequenceId-" } ?: initialPath,
-                            sequenceId = sequenceId,
-                            sequenceType = true,
-                            args = iterateOverMap
-                        )
+        }?.let { block ->
+            block.get(SEQUENCE_FIELD_NAME)?.asText()?.let { sequenceId ->
+                val initialPath = "$threadId-$sequenceId-"
+                val args = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
+                blockArgs?.let { bindVars("", args, it) }
+                val globalArgs = context.globalArgs
+                bindVars("", args, globalArgs)
+                bindVars(path ?: initialPath, args, globalArgs, true)
+                globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
+                context.push(
+                    threadId, StackFrame.create(
+                        path = path?.let { "$it$sequenceId-" } ?: initialPath,
+                        sequenceId = sequenceId,
+                        sequenceType = true,
+                        args = iterateOverMap
                     )
-                }
+                )
+            }
         }
     }
 }

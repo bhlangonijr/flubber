@@ -71,6 +71,7 @@ class Script private constructor(
             result.register("rest", RestAction())
             result.register("json", ParseJsonAction())
             result.register("forEach", ForEachAction())
+            result.register("menu", MenuAction())
             result.loadImports()
             return result
         }

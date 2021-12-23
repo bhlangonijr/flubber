@@ -335,3 +335,44 @@ Iterates over a JSON array by calling a specified sequence for each of its eleme
   }
 }
 ```
+
+## menu
+
+Run a specific sequence based on the option selected by the user.
+
+```json
+        {
+  "action": "menu",
+  "args": {
+    "text": "{{option}}",
+    "options": [
+      {
+        "code": "1",
+        "similar": ["greet", "say hi"],
+        "do": {
+          "sequence": "hello",
+          "args": {
+            "username": "{{username}}"
+          }
+        }
+      },
+      {
+        "code": "2",
+        "similar": ["bye", "say goodbye"],
+        "do": {
+          "sequence": "exit",
+          "args": {
+            "username": "{{username}}"
+          }
+        }
+      }
+    ],
+    "else": {
+      "sequence": "none",
+      "args": {
+        "username": "none selected"
+      }
+    }
+  }
+}
+```
