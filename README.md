@@ -4,7 +4,11 @@ Flubber
 [![](https://jitpack.io/v/bhlangonijr/flubber.svg)](https://jitpack.io/#bhlangonijr/flubber)
 
 Flubber is a simple kotlin/java library for building workflow and automation
-task [domain-specific languages](https://en.wikipedia.org/wiki/Domain-specific_language).
+task [domain-specific languages](https://en.wikipedia.org/wiki/Domain-specific_language). 
+A typical use case is for example the creation of a chatbot DSL for a certain business. 
+One could do that by adding customized actions which can be used to send and receive messages 
+within the internal messaging system of that business. 
+
 
 # Building/Installing
 
@@ -61,26 +65,25 @@ dependencies {
 
 # Usage
 
-The building blocks of any scripts are the actions. Currently, Javascript and Python actions are supported as long as
-they implement the expected interface - a simple function having arguments `context` and `args`. These actions can be
-served by any web server as dynamic/static content or as local files, e.g.,
+The building blocks of any scripts are the actions: an external Javascript or Python file containing 
+a function having arguments `context` and `args`. 
+These actions can be served by any web server as dynamic/static content or as local files, e.g.,
 
 ```javascript
 // hello action. Served by URL: https://localhost:8080/myserver/hello.js
 var action = function(context, args) {
-    return "HELLO: " + args["user"]
+    console.log("HELLO: " + args.user);
+    return "ok";
 }
 ```  
 
 ## Scripting a Hello World DSL
 
+The hello world script below writes a hello message in the console by using the custom action
+`hello` imported in the script: 
+
 ```json
 {
-  "id": "hello-world-script",
-  "author": {
-    "name": "YourName",
-    "e-mail": "me@email.com"
-  },
   "import": [
     {
       "action": "hello",
@@ -95,34 +98,12 @@ var action = function(context, args) {
         {
           "action": "hello",
           "args": {
-            "user": "user {{session.user}}"
-          }
-        }
-      ]
-    },
-    {
-      "id": "exitWithError",
-      "sequence": [
-        {
-          "action": "hello",
-          "args": {
-            "text": "user {{session.user}} your got an error {{ERROR}}"
+            "user": "{{session.user}}"
           }
         }
       ]
     }
-  ],
-  "exceptionally": {
-    "action": "run",
-    "args": {
-      "do": {
-        "sequence": "exitWithError",
-        "args": {
-          "ERROR": "{{exception.message}}"
-        }
-      }
-    }
-  }
+  ]
 }
 ```  
 
@@ -371,6 +352,31 @@ Run a specific sequence based on the option selected by the user.
       "sequence": "none",
       "args": {
         "username": "none selected"
+      }
+    }
+  }
+}
+```
+
+## Handling exceptions
+
+Exceptions can be caught and handled by adding the `exceptionally` object and calling a custom sequence with the
+`run` action.
+
+```json
+{
+  "id": "simple-call-flow",
+  "flow": [
+     
+  ],
+  "exceptionally": {
+    "action": "run",
+    "args": {
+      "do": {
+        "sequence": "exitWithError",
+        "args": {
+          "ERROR": "{{exception.message}}"
+        }
       }
     }
   }
