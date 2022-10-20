@@ -42,7 +42,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
-    <version>0.3.9</version>
+    <version>0.3.11</version>
 </dependency>
 ```
 
@@ -58,7 +58,7 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.3.9'
+    implementation 'com.github.bhlangonijr:flubber:0.3.11'
     ...
 }
 ```
@@ -251,7 +251,8 @@ In the example below `body` from the `httpResponse` has been parsed as a JSON ob
 }
 ```
 
-The field values can be resolved using mustaches further on `{{userProfile.name}}`.
+The field values can be resolved using mustaches further on `{{userProfile.name}}` and accessed through the
+use of Json Pointer [specification](https://www.rfc-editor.org/rfc/rfc6901).
 
 ### json specs
 
