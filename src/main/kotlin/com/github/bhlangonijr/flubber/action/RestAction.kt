@@ -62,7 +62,9 @@ class RestAction : Action {
             .header("Accept", contentType)
         headers?.forEach { requestBuilder.setHeader(it.key, it.value) }
         when (method) {
-            "post", "put" -> requestBuilder.POST(HttpRequest.BodyPublishers.ofString(body))
+            "post" -> requestBuilder.POST(HttpRequest.BodyPublishers.ofString(body))
+            "put" -> requestBuilder.method("PUT", HttpRequest.BodyPublishers.ofString(body))
+            "patch" -> requestBuilder.method("PATCH", HttpRequest.BodyPublishers.ofString(body))
             "delete" -> requestBuilder.DELETE()
             else -> requestBuilder.GET()
         }
