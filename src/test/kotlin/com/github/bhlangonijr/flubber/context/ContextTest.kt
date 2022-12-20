@@ -3,8 +3,10 @@ package com.github.bhlangonijr.flubber.context
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.util.Util.Companion.loadResource
+import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import java.util.concurrent.atomic.AtomicInteger
 
 class ContextTest {
 
@@ -88,5 +90,46 @@ class ContextTest {
         context.push(threadId, StackFrame.create("mainThreadId.main", frame!!.sequenceId, frame.actionIndex))
         assertEquals("waitOnDigits", frame.node["action"]!!.asText())
         assertEquals(ExecutionState.RUNNING, context.threadStateValue(MAIN_THREAD_ID))
+    }
+
+    @Test
+    fun `test registering and unregistering listeners`() {
+
+        val context = Context.load(loadResource("/context-sample.json"))
+        val counter = AtomicInteger()
+
+        context.onComplete { counter.addAndGet(1) }
+        context.onStateChange { _, _ -> counter.addAndGet(3) }
+        context.onAction { _, _, _ -> counter.addAndGet(5)}
+        context.onException { counter.addAndGet(7) }
+
+        context.invokeOnCompleteListeners()
+        context.invokeStateListeners("123", ExecutionState.FINISHED)
+        context.invokeActionListeners(makeJson(), mutableMapOf(), makeJson())
+        context.invokeExceptionListeners(RuntimeException())
+
+        assertEquals(1 + 3 + 5 + 7, counter.get())
+        counter.set(0)
+
+        context.unregisterOnCompleteListeners()
+        context.unregisterStateListeners()
+        context.unregisterActionListeners()
+        context.unregisterExceptionListeners()
+
+        context.invokeOnCompleteListeners()
+        context.invokeStateListeners("123", ExecutionState.FINISHED)
+        context.invokeActionListeners(makeJson(), mutableMapOf(), makeJson())
+        context.invokeExceptionListeners(RuntimeException())
+
+        assertEquals(0, counter.get())
+
+        context.onComplete { counter.addAndGet(1) }
+        context.invokeOnCompleteListeners()
+        assertEquals(1, counter.get())
+        counter.set(0)
+
+        context.unregisterListeners()
+        context.invokeOnCompleteListeners()
+        assertEquals(0, counter.get())
     }
 }
