@@ -61,4 +61,32 @@ open class ContextExecutionListener {
 
         onCompleteListeners.forEach { it.invoke() }
     }
+
+    fun unregisterActionListeners() {
+
+        actionListeners.clear()
+    }
+
+    fun unregisterStateListeners() {
+
+        stateListeners.clear()
+    }
+
+    fun unregisterExceptionListeners() {
+
+        exceptionListeners.clear()
+    }
+
+    fun unregisterOnCompleteListeners() {
+
+        onCompleteListeners.clear()
+    }
+
+    fun unregisterListeners() {
+
+        actionListeners.clear()
+        stateListeners.clear()
+        exceptionListeners.clear()
+        onCompleteListeners.clear()
+    }
 }
