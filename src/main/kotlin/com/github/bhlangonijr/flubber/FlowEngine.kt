@@ -300,16 +300,20 @@ class FlowEngine(
             else -> throw ScriptStateException("Can't find a sequence to execute")
         }?.let { block ->
             block.get(SEQUENCE_FIELD_NAME)?.asText()?.let { sequenceId ->
-                val initialPath = "$threadId-$sequenceId-"
+                val currentPath = path ?: "$threadId-"
                 val args = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
                 blockArgs?.let { bindVars("", args, it) }
                 val globalArgs = context.globalArgs
                 bindVars("", args, globalArgs)
-                bindVars(path ?: initialPath, args, globalArgs, true)
-                globalArgs.setAll<ObjectNode>(objectToNode(args) as ObjectNode)
+                bindVars(currentPath, args, globalArgs, true)
+                objectToNode(args).fields().forEach { field ->
+                    globalArgs.set<JsonNode>(
+                        "$currentPath$sequenceId-${field.key}", field.value
+                    )
+                }
                 context.push(
                     threadId, StackFrame.create(
-                        path = path?.let { "$it$sequenceId-" } ?: initialPath,
+                        path = "$currentPath$sequenceId-",
                         sequenceId = sequenceId,
                         sequenceType = true,
                         args = iterateOverMap
