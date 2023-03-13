@@ -4,7 +4,7 @@ import com.bazaarvoice.jolt.Chainr
 import com.bazaarvoice.jolt.JsonUtils
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 
 /**
@@ -13,7 +13,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 class ParseJsonAction : Action {
 
     companion object {
-        private val objectMapper = ObjectMapper().registerModule(KotlinModule())
+        private val objectMapper = ObjectMapper().registerKotlinModule()
     }
 
     override fun execute(context: JsonNode, args: Map<String, Any?>): Any {

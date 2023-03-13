@@ -2,7 +2,7 @@ package com.github.bhlangonijr.flubber.action
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -20,7 +20,7 @@ import javax.net.ssl.X509TrustManager
 class RestAction : Action {
 
     companion object {
-        private val objectMapper = ObjectMapper().registerModule(KotlinModule())
+        private val objectMapper = ObjectMapper().registerKotlinModule()
         private val sslContext = customSslContext()
 
         private fun customSslContext(): SSLContext {
