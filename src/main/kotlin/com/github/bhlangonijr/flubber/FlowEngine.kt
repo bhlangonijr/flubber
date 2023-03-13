@@ -76,7 +76,9 @@ class FlowEngine(
                 context.pop(callback.threadId)?.let { frame ->
                     val result: Any = if (callback.result.isObject) {
                         nodeToMap(callback.result)
-                    } else callback.result.asText()
+                    } else {
+                        callback.result.asText()
+                    }
                     context.push(
                         callback.threadId,
                         StackFrame.create(
@@ -90,10 +92,10 @@ class FlowEngine(
                     )
                     val objectResult = objectToNode(result)
                     frame.args[SET_FIELD_NAME]?.asText()?.let { field ->
-                        context.globalArgs.set<JsonNode>("${frame.path}$field", objectResult)
+                        context.setVariable("${frame.path}$field", objectResult)
                     }
                     frame.args[SET_GLOBAL_FIELD_NAME]?.asText()?.let { field ->
-                        context.globalArgs.set<JsonNode>(field, objectResult)
+                        context.setVariable(field, objectResult)
                     }
                     context.setThreadState(callback.threadId, ExecutionState.RUNNING)
                     logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
@@ -195,7 +197,7 @@ class FlowEngine(
                             val setField = args[SET_ELEMENT_FIELD_NAME]?.asText() ?: ITERATION_RESULT_FIELD_NAME
                             val elements = it as ArrayNode
                             val element = elements.remove(0)
-                            context.globalArgs.set<JsonNode>("${sequencePath}$setField", objectToNode(element))
+                            context.setVariable("${sequencePath}$setField", objectToNode(element))
                             if (!elements.isEmpty) {
                                 context.push(
                                     threadId, StackFrame.create(
@@ -229,10 +231,10 @@ class FlowEngine(
                     result?.let {
                         args[SET_FIELD_NAME]?.let { field ->
                             val fullPath = "$actionPath$field"
-                            globalArgs.set<JsonNode>(fullPath, objectToNode(result))
+                            context.setVariable(fullPath, objectToNode(result))
                         }
                         args[SET_GLOBAL_FIELD_NAME]?.let { field ->
-                            globalArgs.set<JsonNode>("$field", objectToNode(result))
+                            context.setVariable("$field", objectToNode(result))
                         }
                     }
                     context.push(
@@ -246,11 +248,33 @@ class FlowEngine(
                     )
                     when {
                         result is Boolean ->
-                            executeDoElse(action, result, context, null, threadId, actionPath)
+                            executeDoElse(
+                                action,
+                                result,
+                                context,
+                                null,
+                                threadId,
+                                actionPath
+                            )
                         result is ForEachResult ->
-                            executeDoElse(action, true, context, null, threadId, actionPath, result.elementsNode)
+                            executeDoElse(
+                                action,
+                                true,
+                                context,
+                                null,
+                                threadId,
+                                actionPath,
+                                result.elementsNode
+                            )
                         result is MenuResult ->
-                            executeDoElse(result.sequence, result.result, context, null, threadId, actionPath)
+                            executeDoElse(
+                                result.sequence,
+                                result.result,
+                                context,
+                                null,
+                                threadId,
+                                actionPath
+                            )
                         result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
                             context.setThreadState(threadId, ExecutionState.FINISHED)
                     }
@@ -307,7 +331,7 @@ class FlowEngine(
                 bindVars("", args, globalArgs)
                 bindVars(currentPath, args, globalArgs, true)
                 objectToNode(args).fields().forEach { field ->
-                    globalArgs.set<JsonNode>(
+                    context.setVariable(
                         "$currentPath$sequenceId-${field.key}", field.value
                     )
                 }
