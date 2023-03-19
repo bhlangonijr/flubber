@@ -28,51 +28,49 @@ import com.github.bhlangonijr.flubber.script.Script.Companion.SEQUENCE_FIELD_NAM
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_ELEMENT_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_GLOBAL_FIELD_NAME
-import com.github.bhlangonijr.flubber.util.NamedThreadFactory
 import com.github.bhlangonijr.flubber.util.Util.Companion.bindVars
 import com.github.bhlangonijr.flubber.util.Util.Companion.getId
 import com.github.bhlangonijr.flubber.util.Util.Companion.jsonException
 import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
+import kotlinx.coroutines.Deferred
 import mu.KotlinLogging
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
-
-class FlowEngine(
-    private val executor: Executor = Executors.newCachedThreadPool(
-        NamedThreadFactory("executor-thread")
-    )
-) {
+@OptIn(DelicateCoroutinesApi::class)
+class FlowEngine {
 
     private val logger = KotlinLogging.logger {}
     private val processMonitorMap = mutableMapOf<String, Context>()
-    private val dispatcherExecutor: Executor = Executors.newSingleThreadExecutor(
-        NamedThreadFactory("dispatcher-thread")
-    )
+    private val dispatcherExecutor = newSingleThreadContext("dispatcher-thread")
 
     fun run(context: () -> Context): Context = run(context.invoke())
 
-    fun run(context: Context): Context {
+    fun run(context: Context): Context = runBlocking {
 
         if (context.threadStateValue(MAIN_THREAD_ID) != ExecutionState.NEW) {
             context.invokeExceptionListeners(ScriptStateException("Script already running"))
         } else {
             logger.debug { "Executing script ${context.script.name}" }
-            dispatch(context)
+            dispatchToEventLoop(context)
         }
-        return context
-
+        context
     }
 
-    fun callback(context: Context, callback: Callback): Context {
+    fun run(context: Context, callback: Callback): Context = runBlocking {
 
         if (context.threadStateValue(callback.threadId) != ExecutionState.WAITING) {
             context.invokeExceptionListeners(ScriptStateException("Script not in awaiting state"))
         } else {
             logger.debug { "Callback script ${context.script.name}" }
-            dispatch(context) {
+            dispatchToEventLoop(context) {
                 context.pop(callback.threadId)?.let { frame ->
                     val result: Any = if (callback.result.isObject) {
                         nodeToMap(callback.result)
@@ -103,39 +101,42 @@ class FlowEngine(
             }
 
         }
-        return context
+        context
     }
 
-    fun hook(context: Context, event: Event): Context {
+    fun run(context: Context, event: Event): Context = runBlocking {
 
         if (context.threadStateValue(MAIN_THREAD_ID) == ExecutionState.FINISHED) {
             context.invokeExceptionListeners(ScriptStateException("Script execution is already terminated"))
         } else {
             logger.debug { "Script hook ${event.name}" }
-            dispatch(context) {
+            dispatchToEventLoop(context) {
                 context.script.hooks()
                     ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
                     ?.let { hooks ->
                         val threadId = getId(event.name ?: "hook")
-                        executeDoElse(hooks.first(), true, context, event.args, threadId)
+                        pushDoElseBlockToStack(hooks.first(), true, context, event.args, threadId)
                         context.setThreadState(threadId, ExecutionState.RUNNING)
                         logger.debug { "Script hook calling event ${event.name}" }
                     }
             }
         }
-        return context
+        context
     }
 
-    private fun dispatch(context: Context, runSequentially: () -> Any? = {}) {
+    private suspend fun dispatchToEventLoop(
+        context: Context,
+        runSequentially: suspend () -> Any? = {}
+    ) = coroutineScope {
 
-        dispatcherExecutor.execute {
+        withContext(dispatcherExecutor) {
             runSequentially.invoke()
             if (processMonitorMap[context.id] == null) {
                 processMonitorMap[context.id] = context
-                executor.execute {
+                launch {
                     try {
                         logger.info { "Running: ${context.id}" }
-                        execute(context)
+                        runMainEventLoop(context)
                     } finally {
                         processMonitorMap.remove(context.id)
                     }
@@ -144,152 +145,166 @@ class FlowEngine(
         }
     }
 
-    private fun execute(context: Context) {
+    private suspend fun runMainEventLoop(context: Context) = coroutineScope {
 
-        var onExceptionBlock = false
         while (context.running) {
+            val runningThreads = mutableListOf<Deferred<Unit>>()
             for (threadId in context.state.fieldNames()) {
-                runCatching {
-                    val initialState = context.threadStateValue(threadId)
-                    executeOneStep(context, threadId)
-                    val finalState = context.threadStateValue(threadId)
-                    if (initialState != finalState) {
-                        context.invokeStateListeners(threadId, finalState)
-                    }
-                }.onFailure { exception ->
-                    context.invokeExceptionListeners(ScriptException("Script error", exception))
-                    context.script.exceptionally()
-                        ?.let { action ->
-                            if (onExceptionBlock.not()) {
-                                onExceptionBlock = true
-                                context.threadStack(threadId).removeAll()
-                                executeDoElse(
-                                    action,
-                                    true,
-                                    context,
-                                    jsonException(exception),
-                                    threadId
-                                )
-                            } else {
-                                context.setThreadState(threadId, ExecutionState.FINISHED)
-                            }
-                        } ?: throw NotHandledScriptException("Not handled Script error", exception)
+                val deferred = async {
+                    runThreadLoop(context, threadId)
                 }
+                runningThreads.add(deferred)
+            }
+
+            runningThreads.forEach {
+                it.await()
             }
         }
     }
 
-    private fun executeOneStep(context: Context, threadId: String) {
+    private suspend fun runThreadLoop(context: Context, threadId: String): Unit = coroutineScope {
 
-        if (context.running(threadId)) {
-            logger.trace {
-                "stack: ${context.stack.toPrettyString()}" +
-                        ", \n args: ${context.globalArgs}"
-            }
-            context.next(threadId)?.let { frame ->
-                logger.trace { "frame: $frame" }
-                val actionPath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
-                if (frame.sequenceType) {
-                    val sequencePath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
-                    frame.previousFrame?.let { lastFrame ->
-                        val args = objectToNode(lastFrame.args) as ObjectNode
-                        args[ELEMENTS_FIELD]?.takeIf { !it.isEmpty }?.let {
-                            val setField = args[SET_ELEMENT_FIELD_NAME]?.asText() ?: ITERATION_RESULT_FIELD_NAME
-                            val elements = it as ArrayNode
-                            val element = elements.remove(0)
-                            context.setVariable("${sequencePath}$setField", objectToNode(element))
-                            if (!elements.isEmpty) {
-                                context.push(
-                                    threadId, StackFrame.create(
-                                        path = sequencePath,
-                                        sequenceId = frame.sequenceId,
-                                        sequenceType = true,
-                                        args = args
-                                    )
-                                )
-                            }
-                        }
-                    }
-                    context.push(
-                        threadId, StackFrame.create(
-                            path = actionPath,
-                            sequenceId = frame.sequenceId
-                        )
-                    )
-                } else {
-                    val action = frame.node
-                    val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
-                    args[THREAD_ID_FIELD] = threadId
-                    args[PATH_FIELD] = actionPath
-                    val globalArgs = context.globalArgs
-                    bindVars("", args, globalArgs)
-                    bindVars(actionPath, args, globalArgs, true)
-                    if (args[ASYNC_FIELD] == true) {
-                        context.setThreadState(threadId, ExecutionState.WAITING)
-                    }
-                    val result = executeAction(context, action, args, globalArgs)
-                    result?.let {
-                        args[SET_FIELD_NAME]?.let { field ->
-                            val fullPath = "$actionPath$field"
-                            context.setVariable(fullPath, objectToNode(result))
-                        }
-                        args[SET_GLOBAL_FIELD_NAME]?.let { field ->
-                            context.setVariable("$field", objectToNode(result))
-                        }
-                    }
-                    context.push(
-                        threadId, StackFrame.create(
-                            path = actionPath,
-                            sequenceId = frame.sequenceId,
-                            actionIndex = frame.actionIndex,
-                            args = objectToNode(args),
-                            result = result
-                        )
-                    )
-                    when {
-                        result is Boolean ->
-                            executeDoElse(
-                                action,
-                                result,
-                                context,
-                                null,
-                                threadId,
-                                actionPath
-                            )
-                        result is ForEachResult ->
-                            executeDoElse(
+        var exceptionThrown = false
+        while (context.running(threadId)) {
+            try {
+                executeOneStep(context, threadId)
+            } catch (exception: Exception) {
+                logger.debug(exception) { "Exception caught executing context" }
+                context.invokeExceptionListeners(ScriptException("Script error", exception))
+                context.script.exceptionally()
+                    ?.let { action ->
+                        if (exceptionThrown) {
+                            context.setThreadState(threadId, ExecutionState.FINISHED)
+                        } else {
+                            exceptionThrown = true
+                            context.threadStack(threadId).removeAll()
+                            pushDoElseBlockToStack(
                                 action,
                                 true,
                                 context,
-                                null,
-                                threadId,
-                                actionPath,
-                                result.elementsNode
+                                jsonException(exception),
+                                threadId
                             )
-                        result is MenuResult ->
-                            executeDoElse(
-                                result.sequence,
-                                result.result,
-                                context,
-                                null,
-                                threadId,
-                                actionPath
-                            )
-                        result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
-                            context.setThreadState(threadId, ExecutionState.FINISHED)
-                    }
-                    context.invokeActionListeners(action, args, result)
-                }
+                        }
+                    } ?: throw NotHandledScriptException("Not handled Script error", exception)
             }
         }
     }
 
-    private fun executeAction(
+    private suspend fun executeOneStep(context: Context, threadId: String) = coroutineScope {
+
+        val initialState = context.threadStateValue(threadId)
+        logger.trace {
+            "stack: ${context.stack.toPrettyString()}" +
+                    ", \n args: ${context.globalArgs}"
+        }
+        context.next(threadId)?.let { frame ->
+            logger.trace { "frame: $frame" }
+            val actionPath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
+            if (frame.sequenceType) {
+                val sequencePath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
+                frame.previousFrame?.let { lastFrame ->
+                    val args = objectToNode(lastFrame.args) as ObjectNode
+                    args[ELEMENTS_FIELD]?.takeIf { !it.isEmpty }?.let {
+                        val setField = args[SET_ELEMENT_FIELD_NAME]?.asText() ?: ITERATION_RESULT_FIELD_NAME
+                        val elements = it as ArrayNode
+                        val element = elements.remove(0)
+                        context.setVariable("${sequencePath}$setField", objectToNode(element))
+                        if (!elements.isEmpty) {
+                            context.push(
+                                threadId, StackFrame.create(
+                                    path = sequencePath,
+                                    sequenceId = frame.sequenceId,
+                                    sequenceType = true,
+                                    args = args
+                                )
+                            )
+                        }
+                    }
+                }
+                context.push(
+                    threadId, StackFrame.create(
+                        path = actionPath,
+                        sequenceId = frame.sequenceId
+                    )
+                )
+            } else {
+                val action = frame.node
+                val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
+                args[THREAD_ID_FIELD] = threadId
+                args[PATH_FIELD] = actionPath
+                val globalArgs = context.globalArgs
+                bindVars("", args, globalArgs)
+                bindVars(actionPath, args, globalArgs, true)
+                if (args[ASYNC_FIELD] == true) {
+                    context.setThreadState(threadId, ExecutionState.WAITING)
+                }
+                val result = executeAction(context, action, args, globalArgs)
+                result?.let {
+                    args[SET_FIELD_NAME]?.let { field ->
+                        val fullPath = "$actionPath$field"
+                        context.setVariable(fullPath, objectToNode(result))
+                    }
+                    args[SET_GLOBAL_FIELD_NAME]?.let { field ->
+                        context.setVariable("$field", objectToNode(result))
+                    }
+                }
+                context.push(
+                    threadId, StackFrame.create(
+                        path = actionPath,
+                        sequenceId = frame.sequenceId,
+                        actionIndex = frame.actionIndex,
+                        args = objectToNode(args),
+                        result = result
+                    )
+                )
+                when {
+                    result is Boolean ->
+                        pushDoElseBlockToStack(
+                            action,
+                            result,
+                            context,
+                            null,
+                            threadId,
+                            actionPath
+                        )
+                    result is ForEachResult ->
+                        pushDoElseBlockToStack(
+                            action,
+                            true,
+                            context,
+                            null,
+                            threadId,
+                            actionPath,
+                            result.elementsNode
+                        )
+                    result is MenuResult ->
+                        pushDoElseBlockToStack(
+                            result.sequence,
+                            result.result,
+                            context,
+                            null,
+                            threadId,
+                            actionPath
+                        )
+                    result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
+                        context.setThreadState(threadId, ExecutionState.FINISHED)
+                }
+                context.invokeActionListeners(action, args, result)
+            }
+        }
+        val finalState = context.threadStateValue(threadId)
+        if (initialState != finalState) {
+            context.invokeStateListeners(threadId, finalState)
+        }
+    }
+
+    private suspend fun executeAction(
         context: Context,
         action: JsonNode,
         args: MutableMap<String, Any?>,
         globalArgs: ObjectNode
-    ): Any? {
+    ): Any? = coroutineScope {
 
         val actionName = when {
             action.hasNonNull(ACTION_FIELD_NAME) -> action[ACTION_FIELD_NAME].asText()
@@ -297,7 +312,7 @@ class FlowEngine(
             else -> throw NotValidObjectException("Object is neither a valid action nor decision: $action")
         }
         val actionFunction = context.script.actionMap[actionName]
-        return if (actionFunction == null) {
+        if (actionFunction == null) {
             throw ActionNotFoundException("Action is not registered: [$actionName]")
         } else {
             val result = actionFunction.execute(globalArgs, args)
@@ -306,7 +321,7 @@ class FlowEngine(
         }
     }
 
-    private fun executeDoElse(
+    private suspend fun pushDoElseBlockToStack(
         action: JsonNode,
         result: Boolean,
         context: Context,
@@ -314,7 +329,8 @@ class FlowEngine(
         threadId: String,
         path: String? = null,
         iterateOverMap: JsonNode = makeJson()
-    ) {
+    ) = coroutineScope {
+
         val actionArgs = action.get(GLOBAL_ARGS_FIELD) ?: action
         when {
             context.threadStack(threadId).size() > MAX_STACK_SIZE ->

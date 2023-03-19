@@ -131,7 +131,7 @@ class FlowEngineTest {
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service response
-            engine.callback(
+            engine.run(
                 context, Callback.from(
                     """ 
                 {
@@ -159,7 +159,7 @@ class FlowEngineTest {
         script.register("say", PythonAction(sayAction))
         script.register("hangup") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     queue.offer(args["reference"] as String)
                     return "ok"
                 }
@@ -179,10 +179,13 @@ class FlowEngineTest {
         val script = Script.from(loadResource("/script-example.json"))
         script.register("answer", JavascriptAction(answerAction))
         script.register("say", PythonAction(sayAction))
-
-        engine.run { script.with(args) }.onException {
-            queue.offer(it as Exception)
-        }
+        val context = script.with(args)
+        context
+            .onException {
+                println("Calling exception listener: ${it.message}")
+                queue.offer(it as Exception)
+            }
+        engine.run { context }
 
         assertTrue(queue.poll(5, TimeUnit.SECONDS) is ScriptException)
     }
@@ -220,15 +223,16 @@ class FlowEngineTest {
         )
 
         val context = script.with(args)
-        engine.run { context }.onAction { node, _, result ->
+        context.onAction { node, _, result ->
             if (node["action"]?.asText() == "waitOnDigits") {
                 queueRequest.offer(objectToNode(result!!))
             }
         }
+        engine.run { context }
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service response
-            engine.callback(
+            engine.run(
                 context, Callback.from(
                     """ 
                 {
@@ -258,7 +262,7 @@ class FlowEngineTest {
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -279,15 +283,16 @@ class FlowEngineTest {
         )
 
         val context = script.with(args)
-        engine.run { context }.onAction { node, _, result ->
+        context.onAction { node, _, result ->
             if (node["action"]?.asText() == "waitOnDigits") {
                 queueRequest.offer(objectToNode(result!!))
             }
         }
+        engine.run { context }
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service to call a hook
-            engine.hook(
+            engine.run(
                 context, Event.from(
                     """
                 {

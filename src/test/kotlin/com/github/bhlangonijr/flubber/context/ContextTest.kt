@@ -7,6 +7,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.runBlocking
 
 class ContextTest {
 
@@ -41,7 +42,7 @@ class ContextTest {
     }
 
     @Test
-    fun `test next action and stack push and pop`() {
+    fun `test next action and stack push and pop`() = runBlocking {
 
         val threadId = "main"
         val args = """
@@ -64,7 +65,7 @@ class ContextTest {
     }
 
     @Test
-    fun `test action iteration`() {
+    fun `test action iteration`() = runBlocking {
 
         val threadId = MAIN_THREAD_ID
         val args = """
@@ -93,7 +94,7 @@ class ContextTest {
     }
 
     @Test
-    fun `test registering and unregistering listeners`() {
+    fun `test registering and unregistering listeners`() = runBlocking {
 
         val context = Context.load(loadResource("/context-sample.json"))
         val counter = AtomicInteger()
