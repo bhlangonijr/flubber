@@ -16,6 +16,7 @@ import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAX_STACK_SIZE
 import com.github.bhlangonijr.flubber.context.Context.Companion.PATH_FIELD
 import com.github.bhlangonijr.flubber.context.ExecutionState
+import com.github.bhlangonijr.flubber.context.FramePointer
 import com.github.bhlangonijr.flubber.context.StackFrame
 import com.github.bhlangonijr.flubber.script.*
 import com.github.bhlangonijr.flubber.script.Script.Companion.ACTION_FIELD_NAME
@@ -155,7 +156,6 @@ class FlowEngine {
                 }
                 runningThreads.add(deferred)
             }
-
             runningThreads.forEach {
                 it.await()
             }
@@ -194,34 +194,14 @@ class FlowEngine {
     private suspend fun executeOneStep(context: Context, threadId: String) = coroutineScope {
 
         val initialState = context.threadStateValue(threadId)
-        logger.trace {
-            "stack: ${context.stack.toPrettyString()}" +
-                    ", \n args: ${context.globalArgs}"
+        logger.trace { "stack: ${context.stack.toPrettyString()}" +
+                ", \n args: ${context.globalArgs}"
         }
         context.next(threadId)?.let { frame ->
             logger.trace { "frame: $frame" }
             val actionPath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
             if (frame.sequenceType) {
-                val sequencePath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
-                frame.previousFrame?.let { lastFrame ->
-                    val args = objectToNode(lastFrame.args) as ObjectNode
-                    args[ELEMENTS_FIELD]?.takeIf { !it.isEmpty }?.let {
-                        val setField = args[SET_ELEMENT_FIELD_NAME]?.asText() ?: ITERATION_RESULT_FIELD_NAME
-                        val elements = it as ArrayNode
-                        val element = elements.remove(0)
-                        context.setVariable("${sequencePath}$setField", objectToNode(element))
-                        if (!elements.isEmpty) {
-                            context.push(
-                                threadId, StackFrame.create(
-                                    path = sequencePath,
-                                    sequenceId = frame.sequenceId,
-                                    sequenceType = true,
-                                    args = args
-                                )
-                            )
-                        }
-                    }
-                }
+                unrollIterationFlow(actionPath, context, frame, threadId)
                 context.push(
                     threadId, StackFrame.create(
                         path = actionPath,
@@ -231,24 +211,13 @@ class FlowEngine {
             } else {
                 val action = frame.node
                 val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
-                args[THREAD_ID_FIELD] = threadId
-                args[PATH_FIELD] = actionPath
                 val globalArgs = context.globalArgs
-                bindVars("", args, globalArgs)
-                bindVars(actionPath, args, globalArgs, true)
+                bindActionArguments(actionPath, globalArgs, args, threadId)
                 if (args[ASYNC_FIELD] == true) {
                     context.setThreadState(threadId, ExecutionState.WAITING)
                 }
                 val result = executeAction(context, action, args, globalArgs)
-                result?.let {
-                    args[SET_FIELD_NAME]?.let { field ->
-                        val fullPath = "$actionPath$field"
-                        context.setVariable(fullPath, objectToNode(result))
-                    }
-                    args[SET_GLOBAL_FIELD_NAME]?.let { field ->
-                        context.setVariable("$field", objectToNode(result))
-                    }
-                }
+                populateActionResult(actionPath, context, args, result)
                 context.push(
                     threadId, StackFrame.create(
                         path = actionPath,
@@ -258,45 +227,53 @@ class FlowEngine {
                         result = result
                     )
                 )
-                when {
-                    result is Boolean ->
-                        pushDoElseBlockToStack(
-                            action,
-                            result,
-                            context,
-                            null,
-                            threadId,
-                            actionPath
-                        )
-                    result is ForEachResult ->
-                        pushDoElseBlockToStack(
-                            action,
-                            true,
-                            context,
-                            null,
-                            threadId,
-                            actionPath,
-                            result.elementsNode
-                        )
-                    result is MenuResult ->
-                        pushDoElseBlockToStack(
-                            result.sequence,
-                            result.result,
-                            context,
-                            null,
-                            threadId,
-                            actionPath
-                        )
-                    result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
-                        context.setThreadState(threadId, ExecutionState.FINISHED)
-                }
-                context.invokeActionListeners(action, args, result)
+                processActionResult(actionPath, context, args, action, threadId, result)
             }
         }
         val finalState = context.threadStateValue(threadId)
         if (initialState != finalState) {
             context.invokeStateListeners(threadId, finalState)
         }
+    }
+
+    private suspend fun unrollIterationFlow(
+        actionPath: String,
+        context: Context,
+        frame: FramePointer,
+        threadId: String
+    ) = coroutineScope {
+
+        frame.previousFrame?.let { lastFrame ->
+            val args = objectToNode(lastFrame.args) as ObjectNode
+            args[ELEMENTS_FIELD]?.takeIf { !it.isEmpty }?.let {
+                val setField = args[SET_ELEMENT_FIELD_NAME]?.asText() ?: ITERATION_RESULT_FIELD_NAME
+                val elements = it as ArrayNode
+                val element = elements.remove(0)
+                context.setVariable("${actionPath}$setField", objectToNode(element))
+                if (!elements.isEmpty) {
+                    context.push(
+                        threadId, StackFrame.create(
+                            path = actionPath,
+                            sequenceId = frame.sequenceId,
+                            sequenceType = true,
+                            args = args
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun bindActionArguments(
+        actionPath: String,
+        globalArgs: ObjectNode,
+        args: MutableMap<String, Any?>,
+        threadId: String
+    ) = coroutineScope {
+        args[THREAD_ID_FIELD] = threadId
+        args[PATH_FIELD] = actionPath
+        bindVars("", args, globalArgs)
+        bindVars(actionPath, args, globalArgs, true)
     }
 
     private suspend fun executeAction(
@@ -320,6 +297,69 @@ class FlowEngine {
             result
         }
     }
+
+    private suspend fun populateActionResult(
+        actionPath: String,
+        context: Context,
+        args: MutableMap<String, Any?>,
+        result: Any?
+    ) = coroutineScope {
+
+        result?.let {
+            args[SET_FIELD_NAME]?.let { field ->
+                val fullPath = "$actionPath$field"
+                context.setVariable(fullPath, objectToNode(result))
+            }
+            args[SET_GLOBAL_FIELD_NAME]?.let { field ->
+                context.setVariable("$field", objectToNode(result))
+            }
+        }
+    }
+
+    private suspend fun processActionResult(
+        actionPath: String,
+        context: Context,
+        args: MutableMap<String, Any?>,
+        action: JsonNode,
+        threadId: String,
+        result: Any?
+    ) = coroutineScope {
+
+        when {
+            result is Boolean ->
+                pushDoElseBlockToStack(
+                    action,
+                    result,
+                    context,
+                    null,
+                    threadId,
+                    actionPath
+                )
+            result is ForEachResult ->
+                pushDoElseBlockToStack(
+                    action,
+                    true,
+                    context,
+                    null,
+                    threadId,
+                    actionPath,
+                    result.elementsNode
+                )
+            result is MenuResult ->
+                pushDoElseBlockToStack(
+                    result.sequence,
+                    result.result,
+                    context,
+                    null,
+                    threadId,
+                    actionPath
+                )
+            result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
+                context.setThreadState(threadId, ExecutionState.FINISHED)
+        }
+        context.invokeActionListeners(action, args, result)
+    }
+
 
     private suspend fun pushDoElseBlockToStack(
         action: JsonNode,

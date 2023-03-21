@@ -130,17 +130,19 @@ class Context private constructor(
                     FramePointer(EMPTY_OBJECT, MAIN_FLOW_ID, -1, true)
                 } ?: throw SequenceNotFoundException("Sequence [$MAIN_FLOW_ID] not found")
             }
-
             ExecutionState.RUNNING -> {
                 pop(threadId)?.let { frame ->
                     val nextActionIndex = frame.actionIndex + 1
                     val sequence = script.sequence(frame.sequence)
                         ?: throw SequenceNotFoundException("Sequence [${frame.sequence}] not found")
                     when {
-                        frame.sequenceType -> FramePointer(EMPTY_OBJECT, frame.sequence, nextActionIndex, true, frame)
-                        nextActionIndex < sequence.size() -> script.action(frame.sequence, nextActionIndex)
-                            ?.let { action -> FramePointer(action, frame.sequence, nextActionIndex, false, frame) }
-
+                        frame.sequenceType ->
+                            FramePointer(EMPTY_OBJECT, frame.sequence, nextActionIndex, true, frame)
+                        nextActionIndex < sequence.size() ->
+                            script.action(frame.sequence, nextActionIndex)
+                            ?.let { action ->
+                                FramePointer(action, frame.sequence, nextActionIndex, false, frame)
+                            }
                         threadStack(threadId).isEmpty.not() -> next(threadId)
                         else -> {
                             setThreadState(threadId, ExecutionState.FINISHED)
@@ -149,7 +151,6 @@ class Context private constructor(
                     }
                 }
             }
-
             else -> {
                 null
             }
