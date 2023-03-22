@@ -353,4 +353,39 @@ class FlowEngineTest {
         assertEquals("hello john", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("returned from menu", queue.poll(5, TimeUnit.SECONDS))
     }
+
+    @Test
+    fun `test sequence parallel iterations within the flow`() {
+
+        val queue = ArrayBlockingQueue<String>(10)
+        val engine = FlowEngine()
+
+        val script = Script.from(loadResource("/script-example-iterate-parallel.json"))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+
+        engine.run { script.with(args) }
+        val messages = mutableListOf<String>()
+        var messageCounter = 0
+        for (x in 1..6) {
+            queue.poll(5, TimeUnit.SECONDS)?.let {
+                messages.add(it)
+                messageCounter++
+            }
+        }
+
+        assertTrue(messages.contains("have a good one JOHN"))
+        assertTrue(messages.contains("have a good one MARY"))
+        assertTrue(messages.contains("have a good one ALICE"))
+        assertTrue(messages.contains("have a good one ROMEO"))
+        assertTrue(messages.contains("have a good one JASON"))
+        assertTrue(messages.contains("returned from iterations"))
+        assertEquals(6, messageCounter)
+    }
 }

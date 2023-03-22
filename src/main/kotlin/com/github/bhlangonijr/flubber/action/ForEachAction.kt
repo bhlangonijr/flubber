@@ -19,10 +19,12 @@ class ForEachAction : Action {
         val iterateOverNode = args[Script.ITERATE_OVER_FIELD_NAME]?.let {
             val actionPath = args[Context.PATH_FIELD]
             val path = "$actionPath$it".replace(".", "/")
+            val isParallel = args[Script.PARALLEL_FIELD_NAME] == true
             val node = context.at("/$path")
             val newNode = makeJson()
             val setVariable = "${args[SET_ELEMENT_FIELD_NAME] ?: ITERATION_RESULT_FIELD_NAME}"
             newNode.put(SET_ELEMENT_FIELD_NAME, setVariable)
+            newNode.put(Script.PARALLEL_FIELD_NAME, isParallel)
             when (node) {
                 is ArrayNode -> newNode.putArray(ELEMENTS_FIELD).addAll(node)
                 else -> newNode.putArray(ELEMENTS_FIELD).add(node)

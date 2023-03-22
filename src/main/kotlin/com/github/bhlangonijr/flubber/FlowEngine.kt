@@ -25,6 +25,7 @@ import com.github.bhlangonijr.flubber.script.Script.Companion.DO_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ELSE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.EXIT_NODE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ITERATION_RESULT_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.PARALLEL_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SEQUENCE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_ELEMENT_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_FIELD_NAME
@@ -201,9 +202,10 @@ class FlowEngine {
             logger.trace { "frame: $frame" }
             val actionPath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
             if (frame.sequenceType) {
-                unrollIterationFlow(actionPath, context, frame, threadId)
+                unrollIterationFlow(context, frame, threadId)
                 context.push(
-                    threadId, StackFrame.create(
+                    threadId,
+                    StackFrame.create(
                         path = actionPath,
                         sequenceId = frame.sequenceId
                     )
@@ -219,7 +221,8 @@ class FlowEngine {
                 val result = executeAction(context, action, args, globalArgs)
                 populateActionResult(actionPath, context, args, result)
                 context.push(
-                    threadId, StackFrame.create(
+                    threadId,
+                    StackFrame.create(
                         path = actionPath,
                         sequenceId = frame.sequenceId,
                         actionIndex = frame.actionIndex,
@@ -237,7 +240,6 @@ class FlowEngine {
     }
 
     private suspend fun unrollIterationFlow(
-        actionPath: String,
         context: Context,
         frame: FramePointer,
         threadId: String
@@ -245,20 +247,42 @@ class FlowEngine {
 
         frame.previousFrame?.let { lastFrame ->
             val args = objectToNode(lastFrame.args) as ObjectNode
-            args[ELEMENTS_FIELD]?.takeIf { !it.isEmpty }?.let {
-                val setField = args[SET_ELEMENT_FIELD_NAME]?.asText() ?: ITERATION_RESULT_FIELD_NAME
-                val elements = it as ArrayNode
+            val elements = args[ELEMENTS_FIELD] as ArrayNode?
+            if (elements?.isEmpty == false) {
+                val setField = args[SET_ELEMENT_FIELD_NAME]?.asText()
+                    ?: ITERATION_RESULT_FIELD_NAME
+                val isParallel = args[PARALLEL_FIELD_NAME]?.asBoolean() ?: false
+                val sequencePath = frame.previousFrame.path
                 val element = elements.remove(0)
-                context.setVariable("${actionPath}$setField", objectToNode(element))
+                context.setVariable("${sequencePath}$setField", objectToNode(element))
                 if (!elements.isEmpty) {
-                    context.push(
-                        threadId, StackFrame.create(
-                            path = actionPath,
-                            sequenceId = frame.sequenceId,
-                            sequenceType = true,
-                            args = args
+                    if (isParallel) {
+                        elements.forEach { childElement ->
+                            val childThreadId = getId(setField)
+                            val childPath = "$childThreadId-${frame.sequenceId}-"
+                            context.setVariable("${childPath}$setField", objectToNode(childElement))
+                            context.push(
+                                childThreadId,
+                                StackFrame.create(
+                                    path = childPath,
+                                    sequenceType = true,
+                                    sequenceId = frame.sequenceId
+                                )
+                            )
+                            context.setThreadState(childThreadId, ExecutionState.RUNNING)
+                        }
+                        elements.removeAll()
+                    } else {
+                        context.push(
+                            threadId,
+                            StackFrame.create(
+                                path = sequencePath,
+                                sequenceId = frame.sequenceId,
+                                sequenceType = true,
+                                args = args
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -392,7 +416,8 @@ class FlowEngine {
                     )
                 }
                 context.push(
-                    threadId, StackFrame.create(
+                    threadId,
+                    StackFrame.create(
                         path = "$currentPath$sequenceId-",
                         sequenceId = sequenceId,
                         sequenceType = true,
