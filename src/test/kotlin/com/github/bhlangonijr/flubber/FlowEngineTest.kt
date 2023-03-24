@@ -182,7 +182,6 @@ class FlowEngineTest {
         val context = script.with(args)
         context
             .onException {
-                println("Calling exception listener: ${it.message}")
                 queue.offer(it as Exception)
             }
         engine.run { context }
@@ -327,9 +326,9 @@ class FlowEngineTest {
         }
 
         engine.run { script.with(args) }
-        assertEquals("have a good one john", queue.poll(5, TimeUnit.SECONDS))
-        assertEquals("have a good one mary", queue.poll(5, TimeUnit.SECONDS))
-        assertEquals("have a good one alice", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one JOHN Doe", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one MARY Doe", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one ALICE Doe", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("returned from iterations", queue.poll(5, TimeUnit.SECONDS))
     }
 
@@ -380,11 +379,11 @@ class FlowEngineTest {
             }
         }
 
-        assertTrue(messages.contains("have a good one JOHN"))
-        assertTrue(messages.contains("have a good one MARY"))
-        assertTrue(messages.contains("have a good one ALICE"))
-        assertTrue(messages.contains("have a good one ROMEO"))
-        assertTrue(messages.contains("have a good one JASON"))
+        assertTrue(messages.contains("have a good one JOHN Doe"))
+        assertTrue(messages.contains("have a good one MARY Doe"))
+        assertTrue(messages.contains("have a good one ALICE Doe"))
+        assertTrue(messages.contains("have a good one ROMEO Doe"))
+        assertTrue(messages.contains("have a good one JASON Doe"))
         assertTrue(messages.contains("returned from iterations"))
         assertEquals(6, messageCounter)
     }

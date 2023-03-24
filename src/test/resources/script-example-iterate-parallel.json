@@ -23,7 +23,10 @@
             "setElement": "forEachElement",
             "isParallel": true,
             "do": {
-              "sequence": "greet"
+              "sequence": "greet",
+              "args": {
+                "lastName": "Doe"
+              }
             }
           }
         },
@@ -48,7 +51,7 @@
         {
           "action": "say",
           "args": {
-            "text": "have a good one {{username}}"
+            "text": "have a good one {{username}} {{lastName}}"
           }
         }
       ]

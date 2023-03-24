@@ -38,9 +38,16 @@
       "id": "greet",
       "sequence": [
         {
+          "action": "expression",
+          "args": {
+            "text": "\"{{forEachElement.username}}\".toUpperCase()",
+            "set": "username"
+          }
+        },
+        {
           "action": "say",
           "args": {
-            "text": "have a good one {{forEachElement.username}}"
+            "text": "have a good one {{username}} Doe"
           }
         }
       ]
