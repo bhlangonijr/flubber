@@ -16,7 +16,6 @@ import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAX_STACK_SIZE
 import com.github.bhlangonijr.flubber.context.Context.Companion.PATH_FIELD
 import com.github.bhlangonijr.flubber.context.ExecutionState
-import com.github.bhlangonijr.flubber.context.FramePointer
 import com.github.bhlangonijr.flubber.context.StackFrame
 import com.github.bhlangonijr.flubber.script.*
 import com.github.bhlangonijr.flubber.script.Script.Companion.ACTION_FIELD_NAME
@@ -79,29 +78,19 @@ class FlowEngine {
                     } else {
                         callback.result.asText()
                     }
-                    context.push(
+                    pushCallbackResponseToStack(
+                        context,
                         callback.threadId,
-                        StackFrame.create(
-                            path = frame.path,
-                            sequenceId = frame.sequence,
-                            actionIndex = frame.actionIndex,
-                            args = frame.args,
-                            result = result,
-                            sequenceType = false
-                        )
+                        frame.sequence,
+                        frame.actionIndex,
+                        frame.sequence,
+                        frame.args,
+                        result
                     )
-                    val objectResult = objectToNode(result)
-                    frame.args[SET_FIELD_NAME]?.asText()?.let { field ->
-                        context.setVariable("${frame.path}$field", objectResult)
-                    }
-                    frame.args[SET_GLOBAL_FIELD_NAME]?.asText()?.let { field ->
-                        context.setVariable(field, objectResult)
-                    }
                     context.setThreadState(callback.threadId, ExecutionState.RUNNING)
                     logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
                 }
             }
-
         }
         context
     }
@@ -117,7 +106,7 @@ class FlowEngine {
                     ?.filter { it.get(EVENT_NAME_FIELD)?.asText()?.equals(event.name) ?: false }
                     ?.let { hooks ->
                         val threadId = getId(event.name ?: "hook")
-                        pushDoElseBlockToStack(hooks.first(), true, context, event.args, threadId)
+                        processDoElseBlock(hooks.first(), true, context, event.args, threadId)
                         context.setThreadState(threadId, ExecutionState.RUNNING)
                         logger.debug { "Script hook calling event ${event.name}" }
                     }
@@ -150,21 +139,21 @@ class FlowEngine {
     private suspend fun runMainEventLoop(context: Context) = coroutineScope {
 
         while (context.running) {
-            val runningThreads = mutableListOf<Deferred<Unit>>()
+            val runningThreads = mutableListOf<Deferred<Long>>()
             for (threadId in context.state.fieldNames()) {
                 val deferred = async {
                     runThreadLoop(context, threadId)
                 }
                 runningThreads.add(deferred)
             }
-            runningThreads.forEach {
-                it.await()
-            }
+            val iterationTime = runningThreads.sumOf { it.await() }
+            logger.debug { "Iteration time: $iterationTime" }
         }
     }
 
-    private suspend fun runThreadLoop(context: Context, threadId: String): Unit = coroutineScope {
+    private suspend fun runThreadLoop(context: Context, threadId: String): Long = coroutineScope {
 
+        val init = System.currentTimeMillis()
         var exceptionThrown = false
         while (context.running(threadId)) {
             try {
@@ -179,7 +168,7 @@ class FlowEngine {
                         } else {
                             exceptionThrown = true
                             context.threadStack(threadId).removeAll()
-                            pushDoElseBlockToStack(
+                            processDoElseBlock(
                                 action,
                                 true,
                                 context,
@@ -190,19 +179,20 @@ class FlowEngine {
                     } ?: throw NotHandledScriptException("Not handled Script error", exception)
             }
         }
+        System.currentTimeMillis() - init
     }
 
     private suspend fun executeOneStep(context: Context, threadId: String) = coroutineScope {
 
         val initialState = context.threadStateValue(threadId)
-        logger.trace { "stack: ${context.stack.toPrettyString()}" +
+        logger.trace { "Stack: ${context.stack.toPrettyString()}" +
                 ", \n args: ${context.globalArgs}"
         }
         context.next(threadId)?.let { frame ->
-            logger.trace { "frame: $frame" }
+            logger.trace { "Next frame: $frame" }
             val actionPath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
             if (frame.sequenceType) {
-                // initialize sequence stack at first action
+                // initialize sequence stack with first action
                 context.push(
                     threadId,
                     StackFrame.create(
@@ -302,7 +292,7 @@ class FlowEngine {
 
         when {
             result is Boolean ->
-                pushDoElseBlockToStack(
+                processDoElseBlock(
                     action,
                     result,
                     context,
@@ -311,7 +301,7 @@ class FlowEngine {
                     actionPath
                 )
             result is ForEachResult ->
-                pushDoElseBlockToStack(
+                processDoElseBlock(
                     action,
                     true,
                     context,
@@ -321,7 +311,7 @@ class FlowEngine {
                     result.elementsNode
                 )
             result is MenuResult ->
-                pushDoElseBlockToStack(
+                processDoElseBlock(
                     result.sequence,
                     result.result,
                     context,
@@ -335,7 +325,7 @@ class FlowEngine {
         context.invokeActionListeners(action, args, result)
     }
 
-    private suspend fun pushDoElseBlockToStack(
+    private suspend fun processDoElseBlock(
         action: JsonNode,
         result: Boolean,
         context: Context,
@@ -346,45 +336,42 @@ class FlowEngine {
     ) = coroutineScope {
 
         val actionArgs = action.get(GLOBAL_ARGS_FIELD) ?: action
-        when {
+        val block = when {
             context.threadStack(threadId).size() > MAX_STACK_SIZE ->
                 throw ScriptStackOverflowException("Script stack overflow")
             result && actionArgs.hasNonNull(DO_FIELD_NAME) -> actionArgs.get(DO_FIELD_NAME)
             !result && actionArgs.hasNonNull(ELSE_FIELD_NAME) -> actionArgs.get(ELSE_FIELD_NAME)
             else -> throw ScriptStateException("Can't find a sequence to execute")
-        }?.let { block ->
-            val sequenceName = block.get(SEQUENCE_FIELD_NAME)?.asText()
-            sequenceName?.let { sequenceId ->
-                val currentPath = path ?: "$threadId-"
-                val blockArgs = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
-                blockArgValues?.let { bindVars("", blockArgs, it) }
-                val globalArgs = context.globalArgs
-                bindVars("", blockArgs, globalArgs)
-                bindVars(currentPath, blockArgs, globalArgs, true)
-                objectToNode(blockArgs).fields().forEach { field ->
-                    context.setVariable(
-                        "$currentPath$sequenceId-${field.key}", field.value
-                    )
-                }
-                context.push(
-                    threadId,
-                    StackFrame.create(
-                        path = "$currentPath$sequenceId-",
-                        sequenceId = sequenceId,
-                        sequenceType = true,
-                        args = iterateOverMap
-                    )
-                )
-                unrollIterationFlow(
-                    context,
-                    threadId,
-                    sequenceId,
-                    iterateOverMap,
-                    "$currentPath$sequenceId-",
-                    blockArgs
-                )
-            }
         }
+        val sequenceId = block.get(SEQUENCE_FIELD_NAME).asText()
+        val currentPath = path ?: "$threadId-"
+        val blockArgs = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
+        blockArgValues?.let { bindVars("", blockArgs, it) }
+        val globalArgs = context.globalArgs
+        bindVars("", blockArgs, globalArgs)
+        bindVars(currentPath, blockArgs, globalArgs, true)
+
+        val elements = iterateOverMap[ELEMENTS_FIELD] as ArrayNode?
+
+        elements?.let {
+            unrollIterationFlow(
+                context,
+                threadId,
+                sequenceId,
+                iterateOverMap,
+                "$currentPath$sequenceId-",
+                blockArgs,
+                it
+            )
+        }
+        pushSequenceToStack(
+            context,
+            threadId,
+            "$currentPath$sequenceId-",
+            iterateOverMap,
+            sequenceId,
+            blockArgs
+        )
     }
 
     private suspend fun unrollIterationFlow(
@@ -393,62 +380,92 @@ class FlowEngine {
         sequenceId: String,
         args: JsonNode,
         sequencePath: String,
-        blockArgs: MutableMap<String, Any?>
+        blockArgs: MutableMap<String, Any?>,
+        elements: ArrayNode
     ) = coroutineScope {
 
-        val elements = args[ELEMENTS_FIELD] as ArrayNode?
-        if (elements?.isEmpty == false) {
-            val setField = args[SET_ELEMENT_FIELD_NAME]?.asText()
-                ?: ITERATION_RESULT_FIELD_NAME
-            val isParallel = args[PARALLEL_FIELD_NAME]?.asBoolean() ?: false
-            val element = elements.remove(elements.size() - 1)
-            context.setVariable("${sequencePath}$setField", objectToNode(element))
+        val setField = args[SET_ELEMENT_FIELD_NAME]?.asText()
+            ?: ITERATION_RESULT_FIELD_NAME
+        val isParallel = args[PARALLEL_FIELD_NAME]?.asBoolean() ?: false
+        val element = elements.remove(0)
+        context.setVariable("${sequencePath}$setField", objectToNode(element))
 
-            elements.reversed().forEachIndexed { index, childElement ->
-                val childThreadId = when {
-                    isParallel -> getId(setField)
-                    else -> threadId
-                }
-                val childPath = when {
-                    isParallel -> "$childThreadId-$sequenceId-($index)-"
-                    else -> "$sequencePath-$sequenceId-($index)-"
-                }
-                addExecutionStepToStack(
-                    context,
-                    childPath,
-                    setField,
-                    childElement,
-                    sequenceId,
-                    childThreadId,
-                    blockArgs
-                )
-                if (isParallel) {
-                    context.setThreadState(childThreadId, ExecutionState.RUNNING)
-                }
+        elements.reversed().forEachIndexed { index, childElement ->
+            val childThreadId = when {
+                isParallel -> getId(threadId)
+                else -> threadId
+            }
+            val childPath = when {
+                isParallel -> "$childThreadId-$sequenceId-($index)-"
+                else -> "$sequencePath$sequenceId-($index)-"
+            }
+            context.setVariable("${childPath}$setField", objectToNode(childElement))
+            pushSequenceToStack(
+                context,
+                childThreadId,
+                childPath,
+                childElement,
+                sequenceId,
+                blockArgs
+            )
+            if (isParallel) {
+                context.setThreadState(childThreadId, ExecutionState.RUNNING)
             }
         }
     }
 
-    private suspend fun addExecutionStepToStack(
+    private suspend fun pushSequenceToStack(
         context: Context,
-        childPath: String,
-        setField: String,
-        childElement: JsonNode,
-        sequenceId: String,
         threadId: String,
-        blockArgs: MutableMap<String, Any?>
-    ) {
-        context.setVariable("${childPath}$setField", objectToNode(childElement))
-        objectToNode(blockArgs).fields().forEach { field ->
+        sequencePath: String,
+        element: JsonNode,
+        sequenceId: String,
+        args: MutableMap<String, Any?>
+    ) = coroutineScope {
+        // populate stack variables with arguments passed to sequence
+        objectToNode(args).fields().forEach { field ->
             context.setVariable(
-                "$childPath${field.key}", field.value
+                "$sequencePath${field.key}", field.value
             )
+        }
+        // push a new sequence entry point to stack
+        context.push(
+            threadId,
+            StackFrame.create(
+                path = sequencePath,
+                sequenceId = sequenceId,
+                sequenceType = true,
+                args = element
+            )
+        )
+    }
+
+    private suspend fun pushCallbackResponseToStack(
+        context: Context,
+        threadId: String,
+        sequencePath: String,
+        actionIndex: Int,
+        sequenceId: String,
+        args: JsonNode,
+        result: Any
+    ) = coroutineScope {
+
+        val objectResult = objectToNode(result)
+        args[SET_FIELD_NAME]?.asText()?.let { field ->
+            context.setVariable("${sequencePath}$field", objectResult)
+        }
+        args[SET_GLOBAL_FIELD_NAME]?.asText()?.let { field ->
+            context.setVariable(field, objectResult)
         }
         context.push(
             threadId,
             StackFrame.create(
-                path = childPath,
-                sequenceId = sequenceId
+                path = sequencePath,
+                sequenceId = sequenceId,
+                actionIndex = actionIndex,
+                args = args,
+                result = result,
+                sequenceType = false
             )
         )
     }
