@@ -37,8 +37,7 @@ class Script private constructor(
         const val EXIT_NODE_FIELD_NAME = "exit"
         const val SET_FIELD_NAME = "set"
         const val SET_GLOBAL_FIELD_NAME = "setGlobal"
-        const val SET_ELEMENT_FIELD_NAME = "setElement"
-        const val ITERATION_RESULT_FIELD_NAME = "iterationResult"
+        const val SET_FOREACH_ELEMENT_FIELD_NAME = "setElement"
         const val ITERATE_OVER_FIELD_NAME = "iterateOver"
         const val PARALLEL_FIELD_NAME = "isParallel"
 

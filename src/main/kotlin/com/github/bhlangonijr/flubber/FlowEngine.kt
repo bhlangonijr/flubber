@@ -9,11 +9,13 @@ import com.github.bhlangonijr.flubber.action.ForEachResult
 import com.github.bhlangonijr.flubber.action.MenuResult
 import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.Context.Companion.ASYNC_FIELD
+import com.github.bhlangonijr.flubber.context.Context.Companion.CHILD_THREADS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.ELEMENTS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.EMPTY_OBJECT
 import com.github.bhlangonijr.flubber.context.Context.Companion.GLOBAL_ARGS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAX_STACK_SIZE
+import com.github.bhlangonijr.flubber.context.Context.Companion.PARENT_THREAD_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.PATH_FIELD
 import com.github.bhlangonijr.flubber.context.ExecutionState
 import com.github.bhlangonijr.flubber.context.StackFrame
@@ -23,10 +25,9 @@ import com.github.bhlangonijr.flubber.script.Script.Companion.DECISION_FIELD_NAM
 import com.github.bhlangonijr.flubber.script.Script.Companion.DO_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.ELSE_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.EXIT_NODE_FIELD_NAME
-import com.github.bhlangonijr.flubber.script.Script.Companion.ITERATION_RESULT_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.PARALLEL_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SEQUENCE_FIELD_NAME
-import com.github.bhlangonijr.flubber.script.Script.Companion.SET_ELEMENT_FIELD_NAME
+import com.github.bhlangonijr.flubber.script.Script.Companion.SET_FOREACH_ELEMENT_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_FIELD_NAME
 import com.github.bhlangonijr.flubber.script.Script.Companion.SET_GLOBAL_FIELD_NAME
 import com.github.bhlangonijr.flubber.util.Util.Companion.bindVars
@@ -139,25 +140,40 @@ class FlowEngine {
     private suspend fun runMainEventLoop(context: Context) = coroutineScope {
 
         while (context.running) {
+            logger.trace { "Main event loop threads: ${context.state.toPrettyString()}" }
             val runningThreads = mutableListOf<Deferred<Long>>()
-            for (threadId in context.state.fieldNames()) {
-                val deferred = async {
-                    runThreadLoop(context, threadId)
+            val threads = context.state.fieldNames()
+            threads.forEachRemaining { threadId ->
+                if (context.running(threadId)) {
+                    val deferred = async {
+                        runThreadLoop(context, threadId)
+                    }
+                    runningThreads.add(deferred)
                 }
-                runningThreads.add(deferred)
             }
             val iterationTime = runningThreads.sumOf { it.await() }
-            logger.debug { "Iteration time: $iterationTime" }
+            logger.debug { "Iteration time: $iterationTime for ${context.state.toPrettyString()}" }
         }
     }
 
     private suspend fun runThreadLoop(context: Context, threadId: String): Long = coroutineScope {
 
         val init = System.currentTimeMillis()
+        val scope = this.coroutineContext
         var exceptionThrown = false
         while (context.running(threadId)) {
             try {
-                executeOneStep(context, threadId)
+                withContext(context.mutatorContext) {
+                    val childThreads = getRunningChildThreads(context, threadId)
+                    if (childThreads > 1 && context.threadStateValue(threadId) == ExecutionState.RUNNING) {
+                        context.setThreadState(threadId, ExecutionState.WAITING)
+                        logger.trace { "Putting thread to sleep: $threadId, waiting children: $childThreads" }
+                    } else {
+                        withContext(scope) {
+                            executeOneStep(context, threadId)
+                        }
+                    }
+                }
             } catch (exception: Exception) {
                 logger.debug(exception) { "Exception caught executing context" }
                 context.invokeExceptionListeners(ScriptException("Script error", exception))
@@ -179,14 +195,51 @@ class FlowEngine {
                     } ?: throw NotHandledScriptException("Not handled Script error", exception)
             }
         }
+        updateChildThreads(context, threadId)
         System.currentTimeMillis() - init
+    }
+
+    // Get the number of child threads running when a master thread returns from the split condition
+    private suspend fun getRunningChildThreads(context: Context, threadId: String): Int = coroutineScope {
+
+
+        val childThreadsFieldId = "$threadId$CHILD_THREADS_FIELD"
+        val childThreads = context.getVariable(childThreadsFieldId) as ArrayNode?
+        childThreads?.size()?.let { threads ->
+            context.current(threadId)?.let { stack->
+                when {
+                    context.getAction(stack, stack.actionIndex + 1) == null -> threads
+                    else -> 0
+                }
+            }
+        } ?: 0
+    }
+
+    private suspend fun updateChildThreads(context: Context, threadId: String) = withContext(context.mutatorContext) {
+
+        val parentThreadFieldId = "${threadId}$PARENT_THREAD_FIELD"
+        val parent = context.getVariable(parentThreadFieldId)?.asText()
+        parent?.let { parentThread ->
+            logger.trace { "[$threadId] State: ${context.threadStateValue(threadId)}, " +
+                    "parent: $parentThread$CHILD_THREADS_FIELD" }
+            val childThreadsFieldId = "$parentThread$CHILD_THREADS_FIELD"
+            val childThreads = context.getVariable(childThreadsFieldId)
+            childThreads?.let { child ->
+                logger.trace { "Child: ${child.toPrettyString()}" }
+                (child as ArrayNode).removeAll { it.asText() == threadId }
+                if (context.threadStateValue(parentThread) == ExecutionState.WAITING) {
+                    context.setThreadState(parentThread, ExecutionState.RUNNING)
+                    logger.trace { "Waking up thread: $threadId" }
+                }
+            }
+        }
     }
 
     private suspend fun executeOneStep(context: Context, threadId: String) = coroutineScope {
 
         val initialState = context.threadStateValue(threadId)
         logger.trace { "Stack: ${context.stack.toPrettyString()}" +
-                ", \n args: ${context.globalArgs}"
+                ", \nGlobal Args: ${context.globalArgs.toPrettyString()}"
         }
         context.next(threadId)?.let { frame ->
             logger.trace { "Next frame: $frame" }
@@ -345,13 +398,13 @@ class FlowEngine {
         }
         val sequenceId = block.get(SEQUENCE_FIELD_NAME).asText()
         val currentPath = path ?: "$threadId-"
+        val nextSequence = "$currentPath$sequenceId-"
         val blockArgs = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
-        blockArgValues?.let { bindVars("", blockArgs, it) }
+        val elements = iterateOverMap[ELEMENTS_FIELD] as ArrayNode?
         val globalArgs = context.globalArgs
+        blockArgValues?.let { bindVars("", blockArgs, it) }
         bindVars("", blockArgs, globalArgs)
         bindVars(currentPath, blockArgs, globalArgs, true)
-
-        val elements = iterateOverMap[ELEMENTS_FIELD] as ArrayNode?
 
         elements?.let {
             unrollIterationFlow(
@@ -359,7 +412,7 @@ class FlowEngine {
                 threadId,
                 sequenceId,
                 iterateOverMap,
-                "$currentPath$sequenceId-",
+                nextSequence,
                 blockArgs,
                 it
             )
@@ -367,7 +420,7 @@ class FlowEngine {
         pushSequenceToStack(
             context,
             threadId,
-            "$currentPath$sequenceId-",
+            nextSequence,
             iterateOverMap,
             sequenceId,
             blockArgs
@@ -384,22 +437,26 @@ class FlowEngine {
         elements: ArrayNode
     ) = coroutineScope {
 
-        val setField = args[SET_ELEMENT_FIELD_NAME]?.asText()
-            ?: ITERATION_RESULT_FIELD_NAME
+        val setElementField = args[SET_FOREACH_ELEMENT_FIELD_NAME]?.asText()
+        //val setField = args[SET_FIELD_NAME]?.asText()
         val isParallel = args[PARALLEL_FIELD_NAME]?.asBoolean() ?: false
-        val element = elements.remove(0)
-        context.setVariable("${sequencePath}$setField", objectToNode(element))
+        val childThreads = mutableListOf<String>()
+        val childThreadsFieldId = "${threadId}$CHILD_THREADS_FIELD"
 
+        //first element on the list is handled by master thread
+        val firstElement = elements.remove(0)
+        //set element variable for master thread
+        context.setVariable("${sequencePath}$setElementField", objectToNode(firstElement))
+        childThreads.add(threadId)
+
+        //spawn a new thread for each of the remaining elements in the list
         elements.reversed().forEachIndexed { index, childElement ->
-            val childThreadId = when {
-                isParallel -> getId(threadId)
-                else -> threadId
-            }
-            val childPath = when {
-                isParallel -> "$childThreadId-$sequenceId-($index)-"
-                else -> "$sequencePath$sequenceId-($index)-"
-            }
-            context.setVariable("${childPath}$setField", objectToNode(childElement))
+            val childThreadId = if (isParallel) getId(threadId) else threadId
+            val childPath = "$childThreadId-$sequenceId-($index)-"
+            val elementFieldId = "${childPath}$setElementField"
+
+            context.setVariable(elementFieldId, objectToNode(childElement))
+            childThreads.add(childThreadId)
             pushSequenceToStack(
                 context,
                 childThreadId,
@@ -409,8 +466,13 @@ class FlowEngine {
                 blockArgs
             )
             if (isParallel) {
+                val parentThreadFieldId = "${childThreadId}$PARENT_THREAD_FIELD"
                 context.setThreadState(childThreadId, ExecutionState.RUNNING)
+                context.setVariable(parentThreadFieldId, objectToNode(threadId))
             }
+        }
+        if (isParallel) {
+            context.setVariable(childThreadsFieldId, objectToNode(childThreads))
         }
     }
 

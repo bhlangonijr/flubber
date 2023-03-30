@@ -16,6 +16,7 @@ import java.net.URL
 import java.util.*
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withContext
 
@@ -43,6 +44,8 @@ class Context private constructor(
         const val MAX_STACK_SIZE = 50
         const val MAIN_THREAD_ID = "mainThreadId"
         const val PATH_FIELD = "path"
+        const val CHILD_THREADS_FIELD = "_childThreads"
+        const val PARENT_THREAD_FIELD = "_parentThread"
 
         private val engine = FlowEngine()
 
@@ -75,7 +78,7 @@ class Context private constructor(
         }
     }
 
-    private val mutatorContext: ExecutorCoroutineDispatcher
+    val mutatorContext: ExecutorCoroutineDispatcher
     init {
         mutatorContext = newSingleThreadContext("$id-thread-context")
     }
@@ -103,6 +106,9 @@ class Context private constructor(
             globalArgs.set<JsonNode>(path, value)
         }
     }
+
+    fun getVariable(path: String): JsonNode? =
+        globalArgs.get(path)
 
     fun running(threadId: String): Boolean =
         threadStateValue(threadId) == ExecutionState.RUNNING
@@ -138,28 +144,19 @@ class Context private constructor(
                     when {
                         frame.sequenceType ->
                             FramePointer(EMPTY_OBJECT, frame.sequence, nextActionIndex, true, frame)
-                        nextActionIndex < sequence.size() ->
-                            script.action(frame.sequence, nextActionIndex)
-                            ?.let { action ->
-                                FramePointer(action, frame.sequence, nextActionIndex, false, frame)
-                            }
-                        threadStack(threadId).isEmpty.not() -> next(threadId)
+                        nextActionIndex < sequence.size() -> getAction(frame, nextActionIndex)
+                        threadStack(threadId).isEmpty.not() -> null //next(threadId)
                         else -> {
                             setThreadState(threadId, ExecutionState.FINISHED)
                             null
                         }
                     }
                 }
-            }
-            else -> {
+            } else -> {
                 null
             }
         }
     }
-
-    fun toJson() = toString()
-
-    override fun toString(): String = data.toPrettyString()
 
     suspend fun push(threadId: String, frame: StackFrame): ArrayNode = withContext(mutatorContext) {
 
@@ -177,12 +174,23 @@ class Context private constructor(
         }
     }
 
-    fun current(threadId: String): StackFrame? =
-        if (threadStack(threadId).isEmpty) {
+    suspend fun getAction(frame: StackFrame, actionIndex: Int): FramePointer? = coroutineScope {
+
+        script.action(frame.sequence, actionIndex)
+            ?.let { action ->
+                FramePointer(action, frame.sequence, actionIndex, false, frame)
+            }
+    }
+
+    suspend fun current(threadId: String): StackFrame? = coroutineScope {
+
+        val stack = threadStack(threadId)
+        if (stack.isEmpty) {
             null
         } else {
-            StackFrame(threadStack(threadId).last() as ObjectNode)
+            StackFrame(stack.last() as ObjectNode)
         }
+    }
 
     fun run(): Context = engine.run { this }
 
@@ -190,6 +198,10 @@ class Context private constructor(
 
     fun hook(event: Event): Context = engine.run(this, event)
 
+
+    fun toJson() = toString()
+
+    override fun toString(): String = data.toPrettyString()
 }
 
 data class FramePointer(
