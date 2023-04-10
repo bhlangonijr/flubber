@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
+import kotlin.random.nextInt
 
 class FlowEngineTest {
 
@@ -363,6 +365,10 @@ class FlowEngineTest {
         script.register("say") {
             object : Action {
                 override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                    if (args["threadId"] == "mainThreadId") {
+                        println("${args["threadId"]}")
+                        Thread.sleep(Random.nextLong(100, 700))
+                    }
                     queue.offer(args["text"] as String)
                     return "ok"
                 }

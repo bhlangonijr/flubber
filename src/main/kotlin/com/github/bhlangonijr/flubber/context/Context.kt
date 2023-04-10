@@ -107,6 +107,12 @@ class Context private constructor(
         }
     }
 
+    suspend fun unsetVariable(path: String) {
+        withContext(mutatorContext) {
+            globalArgs.remove(path)
+        }
+    }
+
     fun getVariable(path: String): JsonNode? =
         globalArgs.get(path)
 

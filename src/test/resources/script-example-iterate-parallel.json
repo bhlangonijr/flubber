@@ -22,6 +22,7 @@
             "iterateOver": "object.users",
             "setElement": "forEachElement",
             "isParallel": true,
+            "set": "forEachResult",
             "do": {
               "sequence": "greet",
               "args": {
@@ -52,6 +53,13 @@
           "action": "say",
           "args": {
             "text": "have a good one {{username}} {{lastName}}"
+          }
+        },
+        {
+          "action": "expression",
+          "args": {
+            "text": "\"{{username}} {{lastName}}\"",
+            "set": "forEachResult"
           }
         }
       ]

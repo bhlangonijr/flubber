@@ -54,7 +54,7 @@
         {
           "action": "expression",
           "args": {
-            "text": "\"{{username}} Doe\"",
+            "text": "\"{{username}} {{lastName}}\"",
             "set": "forEachResult"
           }
         }

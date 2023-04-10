@@ -236,49 +236,71 @@ class FlowEngine {
     }
 
     private suspend fun executeOneStep(context: Context, threadId: String) = coroutineScope {
-
         val initialState = context.threadStateValue(threadId)
-        logger.trace { "Stack: ${context.stack.toPrettyString()}" +
-                ", \nGlobal Args: ${context.globalArgs.toPrettyString()}"
+
+        logger.trace {
+            "Stack: ${context.stack.toPrettyString()}, " +
+                    "\nGlobal Args: ${context.globalArgs.toPrettyString()}"
         }
+
         context.next(threadId)?.let { frame ->
             logger.trace { "Next frame: $frame" }
+
             val actionPath = frame.previousFrame?.path ?: "$threadId-${frame.sequenceId}-"
+
             if (frame.sequenceType) {
-                // initialize sequence stack with first action
-                context.push(
-                    threadId,
-                    StackFrame.create(
-                        path = actionPath,
-                        sequenceId = frame.sequenceId
-                    )
-                )
+                // Initialize sequence stack with first action.
+                context.push(threadId, StackFrame.create(path = actionPath, sequenceId = frame.sequenceId))
             } else {
                 val action = frame.node
                 val args = nodeToMap(action[GLOBAL_ARGS_FIELD] ?: EMPTY_OBJECT)
                 val globalArgs = context.globalArgs
+
                 bindActionArguments(actionPath, globalArgs, args, threadId)
+
                 if (args[ASYNC_FIELD] == true) {
                     context.setThreadState(threadId, ExecutionState.WAITING)
                 }
+
                 val result = executeAction(context, action, args, globalArgs)
                 populateActionResult(actionPath, context, args, result)
-                context.push(
-                    threadId,
-                    StackFrame.create(
-                        path = actionPath,
-                        sequenceId = frame.sequenceId,
-                        actionIndex = frame.actionIndex,
-                        args = objectToNode(args),
-                        result = result
-                    )
-                )
+
+                context.push(threadId, StackFrame.create(
+                    path = actionPath,
+                    sequenceId = frame.sequenceId,
+                    actionIndex = frame.actionIndex,
+                    args = objectToNode(args),
+                    result = result
+                ))
+
                 processActionResult(actionPath, context, args, action, threadId, result)
             }
+        } ?: run {
+            logger.trace { "Empty next action: $threadId" }
+            handleEndOfSequence(context, threadId)
         }
+
         val finalState = context.threadStateValue(threadId)
+
         if (initialState != finalState) {
             context.invokeStateListeners(threadId, finalState)
+        }
+    }
+
+    private suspend fun handleEndOfSequence(context: Context, threadId: String) = coroutineScope {
+
+        context.current(threadId)?.let {
+            val currentAction = context.getAction(it, it.actionIndex)
+            logger.trace("Next action: $currentAction")
+        } ?: run {
+            logger.trace { "End of sequence for: $threadId" }
+            // End of sequence, remove local variable references.
+            val fields = context.globalArgs.fieldNames().asSequence().toList()
+
+            for (field in fields.filter { it.startsWith("$threadId-") }) {
+                logger.trace { "Removing: $field" }
+                context.unsetVariable(field)
+            }
         }
     }
 
@@ -438,7 +460,7 @@ class FlowEngine {
     ) = coroutineScope {
 
         val setElementField = args[SET_FOREACH_ELEMENT_FIELD_NAME]?.asText()
-        //val setField = args[SET_FIELD_NAME]?.asText()
+        //val forSetField = args[SET_FIELD_NAME]?.asText()
         val isParallel = args[PARALLEL_FIELD_NAME]?.asBoolean() ?: false
         val childThreads = mutableListOf<String>()
         val childThreadsFieldId = "${threadId}$CHILD_THREADS_FIELD"
@@ -455,7 +477,9 @@ class FlowEngine {
             val childPath = "$childThreadId-$sequenceId-($index)-"
             val elementFieldId = "${childPath}$setElementField"
 
+            //set element variable on each thread
             context.setVariable(elementFieldId, objectToNode(childElement))
+            //add child thread to master's control list
             childThreads.add(childThreadId)
             pushSequenceToStack(
                 context,
