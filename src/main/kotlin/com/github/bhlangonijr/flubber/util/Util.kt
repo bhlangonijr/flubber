@@ -3,6 +3,7 @@ package com.github.bhlangonijr.flubber.util
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.github.bhlangonijr.flubber.context.Context.Companion.EXCEPTION_FIELD
@@ -62,6 +63,8 @@ class Util {
         }
 
         fun makeJson(): ObjectNode = mapper.createObjectNode()
+
+        fun makeJsonArray(): ArrayNode = mapper.createArrayNode()
 
         fun getId(prefix: String): String = "$prefix-${Random.nextInt(1000000, 9999999)}"
     }

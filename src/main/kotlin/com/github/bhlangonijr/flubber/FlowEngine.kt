@@ -12,6 +12,7 @@ import com.github.bhlangonijr.flubber.context.Context.Companion.ASYNC_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.CHILD_THREADS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.ELEMENTS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.EMPTY_OBJECT
+import com.github.bhlangonijr.flubber.context.Context.Companion.FOREACH_SET_ELEMENT_FIELD_NAME
 import com.github.bhlangonijr.flubber.context.Context.Companion.GLOBAL_ARGS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
 import com.github.bhlangonijr.flubber.context.Context.Companion.MAX_STACK_SIZE
@@ -34,6 +35,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.bindVars
 import com.github.bhlangonijr.flubber.util.Util.Companion.getId
 import com.github.bhlangonijr.flubber.util.Util.Companion.jsonException
 import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
+import com.github.bhlangonijr.flubber.util.Util.Companion.makeJsonArray
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import kotlinx.coroutines.Deferred
@@ -217,7 +219,7 @@ class FlowEngine {
 
     private suspend fun updateChildThreads(context: Context, threadId: String) = withContext(context.mutatorContext) {
 
-        val parentThreadFieldId = "${threadId}$PARENT_THREAD_FIELD"
+        val parentThreadFieldId = "$threadId$PARENT_THREAD_FIELD"
         val parent = context.getVariable(parentThreadFieldId)?.asText()
         parent?.let { parentThread ->
             logger.trace { "[$threadId] State: ${context.threadStateValue(threadId)}, " +
@@ -232,6 +234,7 @@ class FlowEngine {
                     logger.trace { "Waking up thread: $threadId" }
                 }
             }
+            context.unsetVariable(parentThreadFieldId)
         }
     }
 
@@ -287,7 +290,7 @@ class FlowEngine {
         }
     }
 
-    private suspend fun handleEndOfSequence(context: Context, threadId: String) = coroutineScope {
+    private suspend fun handleEndOfSequence(context: Context, threadId: String) = withContext(context.mutatorContext) {
 
         context.current(threadId)?.let {
             val currentAction = context.getAction(it, it.actionIndex)
@@ -344,16 +347,39 @@ class FlowEngine {
         args: MutableMap<String, Any?>,
         result: Any?
     ) = coroutineScope {
-
         result?.let {
             args[SET_FIELD_NAME]?.let { field ->
                 val fullPath = "$actionPath$field"
-                context.setVariable(fullPath, objectToNode(result))
+                populateVariable(fullPath, context, result)
+                // handle special case of populating forEach results in the parent variable
+                val forEachSetChildName = "${actionPath}${FOREACH_SET_ELEMENT_FIELD_NAME}"
+                context.getVariable(forEachSetChildName)?.let {
+                    context.getVariable(it.asText())?.let {forEachResult ->
+                        if (it.asText().endsWith("$field")) {
+                            if (forEachResult is ArrayNode) {
+                                forEachResult.add(objectToNode(result))
+                            }
+                        }
+                    }
+                }
             }
             args[SET_GLOBAL_FIELD_NAME]?.let { field ->
-                context.setVariable("$field", objectToNode(result))
+                populateVariable("$field", context, result)
             }
         }
+    }
+
+    private suspend fun populateVariable(
+        fieldPath: String,
+        context: Context,
+        result: Any
+    ) = coroutineScope {
+        val value = when (result) {
+            is ForEachResult -> makeJsonArray()
+            else -> objectToNode(result)
+        }
+
+        context.setVariable(fieldPath, value)
     }
 
     private suspend fun processActionResult(
@@ -460,23 +486,32 @@ class FlowEngine {
     ) = coroutineScope {
 
         val setElementField = args[SET_FOREACH_ELEMENT_FIELD_NAME]?.asText()
-        //val forSetField = args[SET_FIELD_NAME]?.asText()
+        val forSetField = args[SET_FIELD_NAME]?.asText()?.let {
+            "${args[PATH_FIELD]?.asText()}$it"
+        }
         val isParallel = args[PARALLEL_FIELD_NAME]?.asBoolean() ?: false
+        val masterForEachSetFieldId = "${sequencePath}$FOREACH_SET_ELEMENT_FIELD_NAME"
+        val masterElementFieldId = "$sequencePath$setElementField"
         val childThreads = mutableListOf<String>()
-        val childThreadsFieldId = "${threadId}$CHILD_THREADS_FIELD"
+        val childThreadsFieldId = "$threadId$CHILD_THREADS_FIELD"
 
         //first element on the list is handled by master thread
         val firstElement = elements.remove(0)
+        //set variable name of forEach set field in master thread
+        forSetField?.let { context.setVariable(masterForEachSetFieldId, objectToNode(it)) }
         //set element variable for master thread
-        context.setVariable("${sequencePath}$setElementField", objectToNode(firstElement))
+        context.setVariable(masterElementFieldId, objectToNode(firstElement))
         childThreads.add(threadId)
 
         //spawn a new thread for each of the remaining elements in the list
         elements.reversed().forEachIndexed { index, childElement ->
             val childThreadId = if (isParallel) getId(threadId) else threadId
             val childPath = "$childThreadId-$sequenceId-($index)-"
-            val elementFieldId = "${childPath}$setElementField"
+            val elementFieldId = "$childPath$setElementField"
+            val forEachSetFieldId = "$childPath$FOREACH_SET_ELEMENT_FIELD_NAME"
 
+            //set variable name of forEach set field in child threads
+            forSetField?.let { context.setVariable(forEachSetFieldId, objectToNode(it)) }
             //set element variable on each thread
             context.setVariable(elementFieldId, objectToNode(childElement))
             //add child thread to master's control list
@@ -490,7 +525,7 @@ class FlowEngine {
                 blockArgs
             )
             if (isParallel) {
-                val parentThreadFieldId = "${childThreadId}$PARENT_THREAD_FIELD"
+                val parentThreadFieldId = "$childThreadId$PARENT_THREAD_FIELD"
                 context.setThreadState(childThreadId, ExecutionState.RUNNING)
                 context.setVariable(parentThreadFieldId, objectToNode(threadId))
             }
@@ -535,14 +570,10 @@ class FlowEngine {
         args: JsonNode,
         result: Any
     ) = coroutineScope {
+        val argsMap = nodeToMap(args)
 
-        val objectResult = objectToNode(result)
-        args[SET_FIELD_NAME]?.asText()?.let { field ->
-            context.setVariable("${sequencePath}$field", objectResult)
-        }
-        args[SET_GLOBAL_FIELD_NAME]?.asText()?.let { field ->
-            context.setVariable(field, objectResult)
-        }
+        populateActionResult(sequencePath, context, argsMap, result)
+
         context.push(
             threadId,
             StackFrame.create(

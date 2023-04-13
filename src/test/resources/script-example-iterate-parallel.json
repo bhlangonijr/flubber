@@ -34,7 +34,7 @@
         {
           "action": "say",
           "args": {
-            "text": "returned from iterations"
+            "text": "returned from iterations, first name: {{forEachResult/0}} and last name: {{forEachResult/4}}"
           }
         }
       ]

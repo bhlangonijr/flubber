@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
-import kotlin.random.nextInt
 
 class FlowEngineTest {
 
@@ -366,7 +365,6 @@ class FlowEngineTest {
             object : Action {
                 override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     if (args["threadId"] == "mainThreadId") {
-                        println("${args["threadId"]}")
                         Thread.sleep(Random.nextLong(100, 700))
                     }
                     queue.offer(args["text"] as String)
@@ -390,7 +388,7 @@ class FlowEngineTest {
         assertTrue(messages.contains("have a good one ALICE Doe"))
         assertTrue(messages.contains("have a good one ROMEO Doe"))
         assertTrue(messages.contains("have a good one JASON Doe"))
-        assertTrue(messages.contains("returned from iterations"))
+        assertTrue(messages.contains("returned from iterations, first name: JOHN Doe and last name: MARY Doe"))
         assertEquals(6, messageCounter)
     }
 }

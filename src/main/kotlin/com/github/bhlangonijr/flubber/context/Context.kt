@@ -46,6 +46,7 @@ class Context private constructor(
         const val PATH_FIELD = "path"
         const val CHILD_THREADS_FIELD = "_childThreads"
         const val PARENT_THREAD_FIELD = "_parentThread"
+        const val FOREACH_SET_ELEMENT_FIELD_NAME = "_forEachElementFieldName"
 
         private val engine = FlowEngine()
 
