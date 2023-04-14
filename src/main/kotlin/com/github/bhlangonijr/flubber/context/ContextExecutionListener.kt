@@ -1,6 +1,7 @@
 package com.github.bhlangonijr.flubber.context
 
 import com.fasterxml.jackson.databind.JsonNode
+import kotlinx.coroutines.coroutineScope
 
 typealias ActionEvent = (node: JsonNode, args: MutableMap<String, Any?>, result: Any?) -> Unit
 typealias StateEvent = (threadId: String, state: ExecutionState) -> Unit
@@ -42,7 +43,7 @@ open class ContextExecutionListener {
         return this
     }
 
-    fun invokeActionListeners(node: JsonNode, args: MutableMap<String, Any?>, result: Any?) {
+    suspend fun invokeActionListeners(node: JsonNode, args: MutableMap<String, Any?>, result: Any?) = coroutineScope {
 
         actionListeners.forEach { it.invoke(node, args, result) }
     }
@@ -52,7 +53,7 @@ open class ContextExecutionListener {
         stateListeners.forEach { it.invoke(threadId, state) }
     }
 
-    fun invokeExceptionListeners(e: Throwable) {
+    suspend fun invokeExceptionListeners(e: Throwable) = coroutineScope {
 
         exceptionListeners.forEach { it.invoke(e) }
     }

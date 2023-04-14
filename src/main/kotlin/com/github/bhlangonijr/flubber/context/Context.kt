@@ -5,13 +5,22 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.github.bhlangonijr.flubber.Callback
+import com.github.bhlangonijr.flubber.Event
+import com.github.bhlangonijr.flubber.FlowEngine
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.script.Script.Companion.MAIN_FLOW_ID
 import com.github.bhlangonijr.flubber.script.SequenceNotFoundException
 import java.io.InputStream
 import java.net.URL
 import java.util.*
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.withContext
 
+@OptIn(DelicateCoroutinesApi::class)
 class Context private constructor(
     private val data: ObjectNode,
     val script: Script
@@ -35,6 +44,11 @@ class Context private constructor(
         const val MAX_STACK_SIZE = 50
         const val MAIN_THREAD_ID = "mainThreadId"
         const val PATH_FIELD = "path"
+        const val CHILD_THREADS_FIELD = "_childThreads"
+        const val PARENT_THREAD_FIELD = "_parentThread"
+        const val FOREACH_SET_ELEMENT_FIELD_NAME = "_forEachElementFieldName"
+
+        private val engine = FlowEngine()
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -57,38 +71,63 @@ class Context private constructor(
             val data = mapper.createObjectNode()
             data.put(CONTEXT_ID_FIELD, UUID.randomUUID().toString())
             data.set<ObjectNode>(SCRIPT_FIELD, script.root)
-            data.with(STATE_FIELD).put(MAIN_THREAD_ID, ExecutionState.NEW.name)
-            data.with(GLOBAL_FIELD)
+            data.withObject("/$STATE_FIELD")
+                .put(MAIN_THREAD_ID, ExecutionState.NEW.name)
+            data.withObject("/$GLOBAL_FIELD")
                 .set<ObjectNode>(GLOBAL_ARGS_FIELD, argsJson)
             return Context(data, script)
         }
     }
 
+    val mutatorContext: ExecutorCoroutineDispatcher
+    init {
+        mutatorContext = newSingleThreadContext("$id-thread-context")
+    }
+
     val id: String
-        get() = data.get(CONTEXT_ID_FIELD).asText()
+        get() = data.get(CONTEXT_ID_FIELD)?.asText() ?: ""
 
     val globalArgs: ObjectNode
-        get() = data.with(GLOBAL_FIELD).get(GLOBAL_ARGS_FIELD) as ObjectNode
+        get() = data.withObject("/$GLOBAL_FIELD")
+            .get(GLOBAL_ARGS_FIELD) as ObjectNode
 
     val state: ObjectNode
-        get() = data.with(STATE_FIELD)
+        get() = data.withObject("/$STATE_FIELD")
 
     val stack: ObjectNode
-        get() = data.with(STACK_FIELD)
+        get() = data.withObject("/$STACK_FIELD")
 
     val running: Boolean
         get() = state.fieldNames()
             .asSequence()
             .any { running(it) }
 
+    suspend fun setVariable(path: String, value: JsonNode) {
+        withContext(mutatorContext) {
+            globalArgs.set<JsonNode>(path, value)
+        }
+    }
+
+    suspend fun unsetVariable(path: String) {
+        withContext(mutatorContext) {
+            globalArgs.remove(path)
+        }
+    }
+
+    fun getVariable(path: String): JsonNode? =
+        globalArgs.get(path)
+
     fun running(threadId: String): Boolean =
-        threadStateValue(threadId) == ExecutionState.RUNNING || threadStateValue(threadId) == ExecutionState.NEW
+        threadStateValue(threadId) == ExecutionState.RUNNING
+                || threadStateValue(threadId) == ExecutionState.NEW
 
-    fun threadStateValue(threadId: String): ExecutionState = ExecutionState.valueOf(state.get(threadId).asText())
+    fun threadStateValue(threadId: String): ExecutionState =
+        ExecutionState.valueOf(state.get(threadId).asText())
 
-    fun setThreadState(threadId: String, executionState: ExecutionState) {
-
-        state.put(threadId, executionState.name)
+    suspend fun setThreadState(threadId: String, executionState: ExecutionState) {
+        withContext(mutatorContext) {
+            state.put(threadId, executionState.name)
+        }
         if (threadId == MAIN_THREAD_ID && executionState == ExecutionState.FINISHED) {
             invokeOnCompleteListeners()
         }
@@ -96,7 +135,7 @@ class Context private constructor(
 
     fun threadStack(threadId: String): ArrayNode = stack.withArray(threadId)
 
-    fun next(threadId: String = MAIN_THREAD_ID): FramePointer? =
+    suspend fun next(threadId: String = MAIN_THREAD_ID): FramePointer? = withContext(mutatorContext) {
         when (threadStateValue(threadId)) {
             ExecutionState.NEW -> {
                 script.sequence(MAIN_FLOW_ID)?.let {
@@ -110,37 +149,66 @@ class Context private constructor(
                     val sequence = script.sequence(frame.sequence)
                         ?: throw SequenceNotFoundException("Sequence [${frame.sequence}] not found")
                     when {
-                        frame.sequenceType -> FramePointer(EMPTY_OBJECT, frame.sequence, nextActionIndex, true, frame)
-                        nextActionIndex < sequence.size() -> script.action(frame.sequence, nextActionIndex)
-                            ?.let { action -> FramePointer(action, frame.sequence, nextActionIndex, false, frame) }
-                        threadStack(threadId).isEmpty.not() -> next(threadId)
+                        frame.sequenceType ->
+                            FramePointer(EMPTY_OBJECT, frame.sequence, nextActionIndex, true, frame)
+                        nextActionIndex < sequence.size() -> getAction(frame, nextActionIndex)
+                        threadStack(threadId).isEmpty.not() -> null //next(threadId)
                         else -> {
                             setThreadState(threadId, ExecutionState.FINISHED)
                             null
                         }
                     }
                 }
-            }
-            else -> {
+            } else -> {
                 null
             }
         }
+    }
+
+    suspend fun push(threadId: String, frame: StackFrame): ArrayNode = withContext(mutatorContext) {
+
+        val stack = threadStack(threadId)
+        stack.add(frame.data)
+    }
+
+    suspend fun pop(threadId: String): StackFrame? = withContext(mutatorContext) {
+
+        val stack = threadStack(threadId)
+        if (stack.isEmpty) {
+            null
+        } else {
+            StackFrame(stack.remove(stack.size() - 1) as ObjectNode)
+        }
+    }
+
+    suspend fun getAction(frame: StackFrame, actionIndex: Int): FramePointer? = coroutineScope {
+
+        script.action(frame.sequence, actionIndex)
+            ?.let { action ->
+                FramePointer(action, frame.sequence, actionIndex, false, frame)
+            }
+    }
+
+    suspend fun current(threadId: String): StackFrame? = coroutineScope {
+
+        val stack = threadStack(threadId)
+        if (stack.isEmpty) {
+            null
+        } else {
+            StackFrame(stack.last() as ObjectNode)
+        }
+    }
+
+    fun run(): Context = engine.run { this }
+
+    fun callback(callback: Callback): Context = engine.run(this, callback)
+
+    fun hook(event: Event): Context = engine.run(this, event)
+
 
     fun toJson() = toString()
 
     override fun toString(): String = data.toPrettyString()
-
-    fun push(threadId: String, frame: StackFrame): ArrayNode = threadStack(threadId).add(frame.data)
-
-    fun pop(threadId: String): StackFrame? {
-
-        val stack = threadStack(threadId)
-        return if (stack.isEmpty.not()) StackFrame(stack.remove(stack.size() - 1) as ObjectNode) else null
-    }
-
-    fun current(threadId: String): StackFrame? =
-        if (threadStack(threadId).isEmpty.not()) StackFrame(threadStack(threadId).last() as ObjectNode) else null
-
 }
 
 data class FramePointer(

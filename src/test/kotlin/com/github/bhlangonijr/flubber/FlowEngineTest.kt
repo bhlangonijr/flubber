@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 class FlowEngineTest {
 
@@ -131,7 +132,7 @@ class FlowEngineTest {
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service response
-            engine.callback(
+            engine.run(
                 context, Callback.from(
                     """ 
                 {
@@ -159,7 +160,7 @@ class FlowEngineTest {
         script.register("say", PythonAction(sayAction))
         script.register("hangup") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     queue.offer(args["reference"] as String)
                     return "ok"
                 }
@@ -179,10 +180,12 @@ class FlowEngineTest {
         val script = Script.from(loadResource("/script-example.json"))
         script.register("answer", JavascriptAction(answerAction))
         script.register("say", PythonAction(sayAction))
-
-        engine.run { script.with(args) }.onException {
-            queue.offer(it as Exception)
-        }
+        val context = script.with(args)
+        context
+            .onException {
+                queue.offer(it as Exception)
+            }
+        engine.run { context }
 
         assertTrue(queue.poll(5, TimeUnit.SECONDS) is ScriptException)
     }
@@ -220,15 +223,16 @@ class FlowEngineTest {
         )
 
         val context = script.with(args)
-        engine.run { context }.onAction { node, _, result ->
+        context.onAction { node, _, result ->
             if (node["action"]?.asText() == "waitOnDigits") {
                 queueRequest.offer(objectToNode(result!!))
             }
         }
+        engine.run { context }
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service response
-            engine.callback(
+            engine.run(
                 context, Callback.from(
                     """ 
                 {
@@ -258,7 +262,7 @@ class FlowEngineTest {
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -279,15 +283,16 @@ class FlowEngineTest {
         )
 
         val context = script.with(args)
-        engine.run { context }.onAction { node, _, result ->
+        context.onAction { node, _, result ->
             if (node["action"]?.asText() == "waitOnDigits") {
                 queueRequest.offer(objectToNode(result!!))
             }
         }
+        engine.run { context }
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
             //fake external service to call a hook
-            engine.hook(
+            engine.run(
                 context, Event.from(
                     """
                 {
@@ -322,9 +327,9 @@ class FlowEngineTest {
         }
 
         engine.run { script.with(args) }
-        assertEquals("have a good one john", queue.poll(5, TimeUnit.SECONDS))
-        assertEquals("have a good one mary", queue.poll(5, TimeUnit.SECONDS))
-        assertEquals("have a good one alice", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one JOHN Doe", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one MARY Doe", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one ALICE Doe", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("returned from iterations", queue.poll(5, TimeUnit.SECONDS))
     }
 
@@ -347,5 +352,43 @@ class FlowEngineTest {
         engine.run { script.with(args) }
         assertEquals("hello john", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("returned from menu", queue.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun `test sequence parallel iterations within the flow`() {
+
+        val queue = ArrayBlockingQueue<String>(10)
+        val engine = FlowEngine()
+
+        val script = Script.from(loadResource("/script-example-iterate-parallel.json"))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                    if (args["threadId"] == "mainThreadId") {
+                        Thread.sleep(Random.nextLong(100, 700))
+                    }
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+
+        engine.run { script.with(args) }
+        val messages = mutableListOf<String>()
+        var messageCounter = 0
+        for (x in 1..6) {
+            queue.poll(5, TimeUnit.SECONDS)?.let {
+                messages.add(it)
+                messageCounter++
+            }
+        }
+
+        assertTrue(messages.contains("have a good one JOHN Doe"))
+        assertTrue(messages.contains("have a good one MARY Doe"))
+        assertTrue(messages.contains("have a good one ALICE Doe"))
+        assertTrue(messages.contains("have a good one ROMEO Doe"))
+        assertTrue(messages.contains("have a good one JASON Doe"))
+        assertTrue(messages.contains("returned from iterations, first name: JOHN Doe and last name: MARY Doe"))
+        assertEquals(6, messageCounter)
     }
 }

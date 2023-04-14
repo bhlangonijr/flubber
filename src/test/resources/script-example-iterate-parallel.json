@@ -12,7 +12,7 @@
         {
           "action": "json",
           "args": {
-            "text": "{\"users\":[{\"username\":\"john\"},{\"username\":\"mary\"},{\"username\":\"alice\"}]}",
+            "text": "{\"users\":[{\"username\":\"john\"},{\"username\":\"mary\"},{\"username\":\"alice\"},{\"username\":\"romeo\"},{\"username\":\"jason\"}]}",
             "set": "object"
           }
         },
@@ -21,16 +21,20 @@
           "args": {
             "iterateOver": "object.users",
             "setElement": "forEachElement",
+            "isParallel": true,
             "set": "forEachResult",
             "do": {
-              "sequence": "greet"
+              "sequence": "greet",
+              "args": {
+                "lastName": "Doe"
+              }
             }
           }
         },
         {
           "action": "say",
           "args": {
-            "text": "returned from iterations"
+            "text": "returned from iterations, first name: {{forEachResult/0}} and last name: {{forEachResult/4}}"
           }
         }
       ]
@@ -48,7 +52,7 @@
         {
           "action": "say",
           "args": {
-            "text": "have a good one {{username}} Doe"
+            "text": "have a good one {{username}} {{lastName}}"
           }
         },
         {

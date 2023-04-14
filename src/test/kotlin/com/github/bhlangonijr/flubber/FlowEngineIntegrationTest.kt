@@ -18,7 +18,6 @@ class FlowEngineIntegrationTest {
     @Test
     fun `test imported actions`() {
 
-        val engine = FlowEngine()
         val queue = ArrayBlockingQueue<Boolean>(2)
 
         val args = """
@@ -40,15 +39,19 @@ class FlowEngineIntegrationTest {
             }
         }
 
-        val ctx = scriptWithImports.with(args)
-        engine.run { ctx }.onComplete { queue.offer(ctx.globalArgs.get("COMPLETED").asBoolean()) }
+        scriptWithImports
+            .with(args)
+            .apply {
+                this.onComplete { queue.offer(this.globalArgs.get("COMPLETED").asBoolean()) }
+            }
+            .run()
+
         assertTrue(queue.poll(5, TimeUnit.SECONDS) == true)
     }
 
     @Test
     fun `test rest actions`() {
 
-        val engine = FlowEngine()
         val queue = ArrayBlockingQueue<String>(2)
 
         val args = """
@@ -67,8 +70,11 @@ class FlowEngineIntegrationTest {
                 }
             }
         }
-        val ctx = scriptWithRest.with(args)
-        engine.run { ctx }
+
+        scriptWithRest
+            .with(args)
+            .run()
+
         assertTrue(queue.poll(5, TimeUnit.SECONDS) == "Bot name: john typicode")
     }
 

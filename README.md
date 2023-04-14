@@ -42,7 +42,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
-    <version>0.3.12</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -58,7 +58,7 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.3.12'
+    implementation 'com.github.bhlangonijr:flubber:0.4.0'
     ...
 }
 ```
@@ -80,7 +80,7 @@ var action = function(context, args) {
 ## Scripting a Hello World DSL
 
 The hello world script below writes a hello message in the console by using the custom action
-`hello` imported in the script: 
+`hello` imported in the `script`: 
 
 ```json
 {
@@ -110,18 +110,22 @@ The hello world script below writes a hello message in the console by using the 
 ## Running the script
 
 ```kotlin
-
-val script = Script.from(scriptText)
-val args = """
+val args = 
+    """
         {
           "session":{
           "user":"john"
           }
         }
     """
-FlowEngine().run { script.with(args) }
-    .onException { e -> e.printStackTrace() }
 
+Script
+    .from(script)
+    .with(args)
+    .apply {
+        this.onException { e -> println("Oops ${e.message}") }        
+    }
+    .run()
 ```
 
 ## Built-in actions
