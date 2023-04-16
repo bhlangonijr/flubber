@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
 
 class FlowEngineTest {
@@ -32,7 +33,7 @@ class FlowEngineTest {
         """
 
     @Test
-    fun `test running full script`() {
+    fun `test running full script`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(10)
         val engine = FlowEngine()
@@ -66,7 +67,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test running script with unconditional block`() {
+    fun `test running script with unconditional block`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(3)
         val engine = FlowEngine()
@@ -88,7 +89,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test running script and respond to listeners`() {
+    fun `test running script and respond to listeners`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(3)
         val queueRequest = ArrayBlockingQueue<JsonNode>(2)
@@ -150,7 +151,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test missing actions in main flow`() {
+    fun `test missing actions in main flow`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(2)
         val engine = FlowEngine()
@@ -172,7 +173,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test missing registered action inside exception handling block`() {
+    fun `test missing registered action inside exception handling block`() = runBlocking {
 
         val queue = ArrayBlockingQueue<Exception>(2)
         val engine = FlowEngine()
@@ -191,7 +192,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test resuming script with callback`() {
+    fun `test resuming script with callback`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(3)
         val queueRequest = ArrayBlockingQueue<JsonNode>(2)
@@ -251,7 +252,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test script hooks`() {
+    fun `test script hooks`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(3)
         val queueRequest = ArrayBlockingQueue<JsonNode>(2)
@@ -311,7 +312,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test sequence iterations within the flow`() {
+    fun `test sequence iterations within the flow`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(5)
         val engine = FlowEngine()
@@ -334,7 +335,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test sequence call from menu`() {
+    fun `test sequence call from menu`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(5)
         val engine = FlowEngine()
@@ -355,7 +356,7 @@ class FlowEngineTest {
     }
 
     @Test
-    fun `test sequence parallel iterations within the flow`() {
+    fun `test sequence parallel iterations within the flow`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(10)
         val engine = FlowEngine()

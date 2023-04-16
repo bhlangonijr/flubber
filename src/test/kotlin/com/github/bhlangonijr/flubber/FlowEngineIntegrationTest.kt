@@ -5,10 +5,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.action.Action
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.util.Util.Companion.loadResource
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class FlowEngineIntegrationTest {
 
@@ -16,7 +19,7 @@ class FlowEngineIntegrationTest {
     private val scriptWithRest = Script.from(loadResource("/script-example-rest.json"))
 
     @Test
-    fun `test imported actions`() {
+    fun `test imported actions`() = runBlocking {
 
         val queue = ArrayBlockingQueue<Boolean>(2)
 
@@ -46,11 +49,13 @@ class FlowEngineIntegrationTest {
             }
             .run()
 
-        assertTrue(queue.poll(5, TimeUnit.SECONDS) == true)
+        assertTrue(withContext(Dispatchers.IO) {
+            queue.poll(5, TimeUnit.SECONDS)
+        } == true)
     }
 
     @Test
-    fun `test rest actions`() {
+    fun `test rest actions`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(2)
 

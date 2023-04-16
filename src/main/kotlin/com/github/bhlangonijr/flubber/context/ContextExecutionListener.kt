@@ -3,44 +3,44 @@ package com.github.bhlangonijr.flubber.context
 import com.fasterxml.jackson.databind.JsonNode
 import kotlinx.coroutines.coroutineScope
 
-typealias ActionEvent = (node: JsonNode, args: MutableMap<String, Any?>, result: Any?) -> Unit
-typealias StateEvent = (threadId: String, state: ExecutionState) -> Unit
+typealias ActionEvent = suspend (node: JsonNode, args: MutableMap<String, Any?>, result: Any?) -> Unit
+typealias StateEvent = suspend (threadId: String, state: ExecutionState) -> Unit
 
 open class ContextExecutionListener {
 
     private val actionListeners: MutableList<ActionEvent> = mutableListOf()
     private val stateListeners: MutableList<StateEvent> = mutableListOf()
-    private val onCompleteListeners: MutableList<() -> Unit> = mutableListOf()
-    private val exceptionListeners: MutableList<(e: Throwable) -> Unit> = mutableListOf()
+    private val onCompleteListeners: MutableList<suspend () -> Unit> = mutableListOf()
+    private val exceptionListeners: MutableList<suspend (e: Throwable) -> Unit> = mutableListOf()
 
-    fun onAction(
-        action: (
+    suspend fun onAction(
+        action: suspend (
             node: JsonNode,
             args: MutableMap<String, Any?>,
             result: Any?
         ) -> Unit
-    ): ContextExecutionListener {
+    ): ContextExecutionListener = coroutineScope {
 
         actionListeners.add(action)
-        return this
+        return@coroutineScope this@ContextExecutionListener
     }
 
-    fun onException(action: (e: Throwable) -> Unit): ContextExecutionListener {
+    suspend fun onException(action: suspend (e: Throwable) -> Unit): ContextExecutionListener = coroutineScope {
 
         exceptionListeners.add(action)
-        return this
+        return@coroutineScope this@ContextExecutionListener
     }
 
-    fun onStateChange(state: StateEvent): ContextExecutionListener {
+    suspend fun onStateChange(state: StateEvent): ContextExecutionListener = coroutineScope {
 
         stateListeners.add(state)
-        return this
+        return@coroutineScope this@ContextExecutionListener
     }
 
-    fun onComplete(action: () -> Unit): ContextExecutionListener {
+    suspend fun onComplete(action: suspend () -> Unit): ContextExecutionListener = coroutineScope {
 
         onCompleteListeners.add(action)
-        return this
+        return@coroutineScope this@ContextExecutionListener
     }
 
     suspend fun invokeActionListeners(node: JsonNode, args: MutableMap<String, Any?>, result: Any?) = coroutineScope {
@@ -48,7 +48,7 @@ open class ContextExecutionListener {
         actionListeners.forEach { it.invoke(node, args, result) }
     }
 
-    fun invokeStateListeners(threadId: String, state: ExecutionState) {
+    suspend fun invokeStateListeners(threadId: String, state: ExecutionState) = coroutineScope {
 
         stateListeners.forEach { it.invoke(threadId, state) }
     }
@@ -58,32 +58,32 @@ open class ContextExecutionListener {
         exceptionListeners.forEach { it.invoke(e) }
     }
 
-    fun invokeOnCompleteListeners() {
+    suspend fun invokeOnCompleteListeners() = coroutineScope {
 
         onCompleteListeners.forEach { it.invoke() }
     }
 
-    fun unregisterActionListeners() {
+    suspend fun unregisterActionListeners() = coroutineScope {
 
         actionListeners.clear()
     }
 
-    fun unregisterStateListeners() {
+    suspend fun unregisterStateListeners() = coroutineScope {
 
         stateListeners.clear()
     }
 
-    fun unregisterExceptionListeners() {
+    suspend fun unregisterExceptionListeners() = coroutineScope {
 
         exceptionListeners.clear()
     }
 
-    fun unregisterOnCompleteListeners() {
+    suspend fun unregisterOnCompleteListeners() = coroutineScope {
 
         onCompleteListeners.clear()
     }
 
-    fun unregisterListeners() {
+    suspend fun unregisterListeners() = coroutineScope {
 
         actionListeners.clear()
         stateListeners.clear()
