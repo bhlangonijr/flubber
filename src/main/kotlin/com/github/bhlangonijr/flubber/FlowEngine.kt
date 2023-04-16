@@ -55,9 +55,9 @@ class FlowEngine {
     private val processMonitorMap = mutableMapOf<String, Context>()
     private val dispatcherExecutor = newSingleThreadContext("dispatcher-thread")
 
-    fun run(context: () -> Context): Context = run(context.invoke())
+    suspend fun run(context: () -> Context): Context = run(context.invoke())
 
-    fun run(context: Context): Context = runBlocking {
+    suspend fun run(context: Context): Context = coroutineScope {
 
         if (context.threadStateValue(MAIN_THREAD_ID) != ExecutionState.NEW) {
             context.invokeExceptionListeners(ScriptStateException("Script already running"))
@@ -68,7 +68,7 @@ class FlowEngine {
         context
     }
 
-    fun run(context: Context, callback: Callback): Context = runBlocking {
+    suspend fun run(context: Context, callback: Callback): Context = coroutineScope {
 
         if (context.threadStateValue(callback.threadId) != ExecutionState.WAITING) {
             context.invokeExceptionListeners(ScriptStateException("Script not in awaiting state"))
@@ -98,7 +98,7 @@ class FlowEngine {
         context
     }
 
-    fun run(context: Context, event: Event): Context = runBlocking {
+    suspend fun run(context: Context, event: Event): Context = coroutineScope {
 
         if (context.threadStateValue(MAIN_THREAD_ID) == ExecutionState.FINISHED) {
             context.invokeExceptionListeners(ScriptStateException("Script execution is already terminated"))

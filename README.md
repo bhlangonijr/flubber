@@ -42,7 +42,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
-    <version>0.4.0</version>
+    <version>0.4.1</version>
 </dependency>
 ```
 
@@ -58,7 +58,7 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.4.0'
+    implementation 'com.github.bhlangonijr:flubber:0.4.1'
     ...
 }
 ```
@@ -320,6 +320,53 @@ Iterates over a JSON array by calling a specified sequence for each of its eleme
     }
   }
 }
+```
+
+### Iteration parallelism
+
+To execute iteration in parallel for each input array element, set the `isParallel` property to `true` 
+and use the `forEach` action. If the child sequence sets a local variable with the same name as the 
+parent variable `forEach`'s action it will collect and aggregate all child values in the 
+parent array variable.  
+
+
+```json
+{
+  "action": "forEach",
+  "args": {
+    "iterateOver": "object.users",
+    "setElement": "forEachElement",
+    "isParallel": true,
+    "set": "forEachResult",
+    "do": {
+      "sequence": "greet"
+    }
+  }
+}
+```
+
+Example:
+
+```json
+
+{
+  "id": "greet",
+  "sequence": [
+    {
+      "action": "expression",
+      "args": {
+        "text": "Hello {{username}}",
+        "set": "forEachResult"
+      }
+    }
+  ]
+}
+```
+
+Variable `forEachResult` declared in the local scope of parent sequence containing `forEach` will be set to:
+
+```json
+["Hello john", "Hello mary", "Hello alice"]
 ```
 
 ## menu

@@ -199,11 +199,11 @@ class Context private constructor(
         }
     }
 
-    fun run(): Context = engine.run { this }
+    suspend fun run(): Context = engine.run { this }
 
-    fun callback(callback: Callback): Context = engine.run(this, callback)
+    suspend fun callback(callback: Callback): Context = engine.run(this, callback)
 
-    fun hook(event: Event): Context = engine.run(this, event)
+    suspend fun hook(event: Event): Context = engine.run(this, event)
 
 
     fun toJson() = toString()

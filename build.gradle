@@ -1,8 +1,8 @@
 group 'com.github.bhlangonijr'
-version '0.4.0'
+version '0.4.1'
 
 buildscript {
-    ext.kotlin_version = '1.8.0'
+    ext.kotlin_version = '1.8.20'
     repositories {
         mavenCentral()
     }
