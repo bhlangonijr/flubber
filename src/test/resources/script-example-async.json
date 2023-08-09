@@ -14,9 +14,31 @@
           "action": "answer"
         },
         {
+          "action": "run",
+          "args": {
+            "do": {
+              "sequence": "doWaitDigits",
+              "args": {
+                "USER": "{{session.user}} doe"
+              }
+            }
+          }
+        },
+        {
           "action": "say",
           "args": {
-            "text": "hello {{session.user}}, press 1000 to greet or 2000 to quit."
+            "text": "bye {{session.user}}, returned from decision"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doWaitDigits",
+      "sequence": [
+        {
+          "action": "say",
+          "args": {
+            "text": "hello {{USER}}, press 1000 to greet or 2000 to quit."
           }
         },
         {
@@ -35,7 +57,7 @@
             "do": {
               "sequence": "greetAndExit",
               "args": {
-                "HANGUP_CODE": "normal"
+                "USER_NAME_FROM_PARAM": "{{USER}}"
               }
             },
             "else": {
@@ -44,12 +66,6 @@
                 "HANGUP_CODE": "normal"
               }
             }
-          }
-        },
-        {
-          "action": "say",
-          "args": {
-            "text": "bye {{session.user}}, returned from decision"
           }
         }
       ]
@@ -100,7 +116,7 @@
         {
           "action": "say",
           "args": {
-            "text": "have a good one {{session.user}}"
+            "text": "have a good one {{USER_NAME_FROM_PARAM}}"
           }
         },
         {

@@ -74,25 +74,25 @@ class FlowEngine {
             context.invokeExceptionListeners(ScriptStateException("Script not in awaiting state"))
         } else {
             logger.debug { "Callback script ${context.script.name}" }
+            val result: Any = if (callback.result.isObject) {
+                nodeToMap(callback.result)
+            } else {
+                callback.result.asText()
+            }
             dispatchToEventLoop(context) {
                 context.pop(callback.threadId)?.let { frame ->
-                    val result: Any = if (callback.result.isObject) {
-                        nodeToMap(callback.result)
-                    } else {
-                        callback.result.asText()
-                    }
                     pushCallbackResponseToStack(
                         context,
                         callback.threadId,
-                        frame.sequence,
+                        frame.path,
                         frame.actionIndex,
                         frame.sequence,
                         frame.args,
                         result
                     )
-                    context.setThreadState(callback.threadId, ExecutionState.RUNNING)
-                    logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
                 }
+                context.setThreadState(callback.threadId, ExecutionState.RUNNING)
+                logger.debug { "Callback resuming script ${context.script.name} and response: $result" }
             }
         }
         context

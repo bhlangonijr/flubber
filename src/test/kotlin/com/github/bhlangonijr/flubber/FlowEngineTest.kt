@@ -246,8 +246,8 @@ class FlowEngineTest {
                 .onException { e -> e.printStackTrace() }
         }
 
-        assertEquals("hello john, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
-        assertEquals("have a good one john", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("hello john doe, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("have a good one john doe", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("bye john, returned from decision", queue.poll(5, TimeUnit.SECONDS))
     }
 
@@ -307,7 +307,7 @@ class FlowEngineTest {
             ).onException { e -> e.printStackTrace() }
         }
 
-        assertEquals("hello john, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("hello john doe, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("exited john with external quit", queue.poll(5, TimeUnit.SECONDS))
     }
 
