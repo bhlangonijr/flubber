@@ -51,6 +51,45 @@ class UtilTest {
             "hello {{session.user, press {{option1}} to greet or {option2} to quit.",
             incorrectArgs["text"] as String
         )
+    }
 
+    @Test
+    fun `test variable binding on lists`() {
+
+        val globalArgs = mapper.readTree(
+            """ 
+        {
+          "session": {
+            "user": "ben-hur"      
+          },
+          "option1":"1000",
+          "option2":"2000"
+        }
+        """.trimIndent()
+        )
+
+        val arrayArgs = nodeToMap(
+            mapper.readTree("""{
+                "list": [{"prop1": "{{session.user}}"},{"prop1": "one"},{"prop1": "{{session.user}}"}]
+                }""".trimIndent()
+            )
+        )
+        Util.bindVars("", arrayArgs, globalArgs)
+        assertEquals(
+            "ben-hur",
+            ((arrayArgs["list"] as List<*>)[0] as Map<*, *>)["prop1"]
+        )
+
+        val arrayStringArgs = nodeToMap(
+            mapper.readTree("""{
+                "list": ["{{session.user}}","one","{{session.user}}"]
+                }""".trimIndent()
+            )
+        )
+        Util.bindVars("", arrayStringArgs, globalArgs)
+        assertEquals(
+            "ben-hur",
+            ((arrayStringArgs["list"] as List<*>)[0] as String)
+        )
     }
 }

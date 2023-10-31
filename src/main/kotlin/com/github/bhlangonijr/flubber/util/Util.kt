@@ -28,28 +28,50 @@ class Util {
             globalArgs: JsonNode,
             replaceBlank: Boolean = false
         ) {
-
             for (entry in args.entries) {
                 if (entry.value is Map<*, *>) {
                     @Suppress("UNCHECKED_CAST")
                     bindVars(fullPath, entry.value as MutableMap<String, Any?>, globalArgs)
-                } else if (entry.value is String) {
-                    val text = entry.value as String
-                    if (text.indexOf("}}") > text.indexOf("{{")) {
-                        val vars = text.split("}}")
-                            .filter { it.contains("{{") }
-                            .map { it.split("{{")[1] }
-                        for (variable in vars) {
-                            val path = "$fullPath$variable".replace(".", "/")
-                            val resolved = globalArgs.at("/$path").asText()
-                            val newText = args[entry.key] as String
-                            if (resolved.isNotEmpty() || replaceBlank) {
-                                args[entry.key] = newText.replace("{{$variable}}", resolved)
+                } else if (entry.value is List<*>) {
+                    val list = entry.value as List<*>
+                    if (list.isNotEmpty() && list.all { it is String }) {
+                        args[entry.key] = list.map {
+                            bindVarInString(it as String, replaceBlank, globalArgs, fullPath)
+                        }
+                    } else {
+                        list.forEach {
+                            if (it is MutableMap<*, *>) {
+                                @Suppress("UNCHECKED_CAST")
+                                bindVars(fullPath, it as MutableMap<String, Any?>, globalArgs)
                             }
                         }
                     }
+                } else if (entry.value is String) {
+                    val text = entry.value as String
+                    args[entry.key] = bindVarInString(text, replaceBlank, globalArgs, fullPath)
                 }
             }
+        }
+
+        private fun bindVarInString(
+            text: String, replaceBlank: Boolean,
+            globalArgs: JsonNode,
+            fullPath: String
+        ): String {
+            var newText = text
+            if (text.indexOf("}}") > text.indexOf("{{")) {
+                val vars = text.split("}}")
+                    .filter { it.contains("{{") }
+                    .map { it.split("{{")[1] }
+                for (variable in vars) {
+                    val path = "$fullPath$variable".replace(".", "/")
+                    val resolved = globalArgs.at("/$path").asText()
+                    if (resolved.isNotEmpty() || replaceBlank) {
+                        newText = newText.replace("{{$variable}}", resolved)
+                    }
+                }
+            }
+            return newText
         }
 
         fun jsonException(e: Throwable): JsonNode {
