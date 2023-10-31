@@ -161,7 +161,6 @@ class FlowEngine {
     private suspend fun runThreadLoop(context: Context, threadId: String): Long = coroutineScope {
 
         val init = System.currentTimeMillis()
-        val scope = this.coroutineContext
         var exceptionThrown = false
         while (context.running(threadId)) {
             try {
@@ -171,9 +170,8 @@ class FlowEngine {
                         context.setThreadState(threadId, ExecutionState.WAITING)
                         logger.trace { "Putting thread to sleep: $threadId, waiting children: $childThreads" }
                     } else {
-                        withContext(scope) {
-                            executeOneStep(context, threadId)
-                        }
+                        executeOneStep(context, threadId)
+
                     }
                 }
             } catch (exception: Exception) {
