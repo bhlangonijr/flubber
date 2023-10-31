@@ -16,6 +16,7 @@ import java.net.URL
 import java.util.*
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withContext
@@ -207,6 +208,14 @@ class Context private constructor(
 
 
     fun toJson() = toString()
+
+    suspend fun close() {
+
+        data.removeAll()
+        unregisterListeners()
+        mutatorContext.cancel()
+        mutatorContext.close()
+    }
 
     override fun toString(): String = data.toPrettyString()
 }
