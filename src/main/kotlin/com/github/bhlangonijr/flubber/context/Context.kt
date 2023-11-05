@@ -14,14 +14,11 @@ import com.github.bhlangonijr.flubber.script.SequenceNotFoundException
 import java.io.InputStream
 import java.net.URL
 import java.util.*
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.newSingleThreadContext
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-@OptIn(DelicateCoroutinesApi::class)
+
 class Context private constructor(
     private val data: ObjectNode,
     val script: Script
@@ -80,10 +77,7 @@ class Context private constructor(
         }
     }
 
-    val mutatorContext: ExecutorCoroutineDispatcher
-    init {
-        mutatorContext = newSingleThreadContext("$id-thread-context")
-    }
+    val mutex = Mutex()
 
     val id: String
         get() = data.get(CONTEXT_ID_FIELD)?.asText() ?: ""
@@ -104,13 +98,13 @@ class Context private constructor(
             .any { running(it) }
 
     suspend fun setVariable(path: String, value: JsonNode) {
-        withContext(mutatorContext) {
+        mutex.withLock {
             globalArgs.set<JsonNode>(path, value)
         }
     }
 
     suspend fun unsetVariable(path: String) {
-        withContext(mutatorContext) {
+        mutex.withLock {
             globalArgs.remove(path)
         }
     }
@@ -126,7 +120,7 @@ class Context private constructor(
         ExecutionState.valueOf(state.get(threadId).asText())
 
     suspend fun setThreadState(threadId: String, executionState: ExecutionState) {
-        withContext(mutatorContext) {
+        mutex.withLock {
             state.put(threadId, executionState.name)
         }
         if (threadId == MAIN_THREAD_ID && executionState == ExecutionState.FINISHED) {
@@ -136,7 +130,7 @@ class Context private constructor(
 
     fun threadStack(threadId: String): ArrayNode = stack.withArray(threadId)
 
-    suspend fun next(threadId: String = MAIN_THREAD_ID): FramePointer? = withContext(mutatorContext) {
+    suspend fun next(threadId: String = MAIN_THREAD_ID): FramePointer? = coroutineScope {
         when (threadStateValue(threadId)) {
             ExecutionState.NEW -> {
                 script.sequence(MAIN_FLOW_ID)?.let {
@@ -166,13 +160,13 @@ class Context private constructor(
         }
     }
 
-    suspend fun push(threadId: String, frame: StackFrame): ArrayNode = withContext(mutatorContext) {
+    suspend fun push(threadId: String, frame: StackFrame): ArrayNode = mutex.withLock {
 
         val stack = threadStack(threadId)
         stack.add(frame.data)
     }
 
-    suspend fun pop(threadId: String): StackFrame? = withContext(mutatorContext) {
+    suspend fun pop(threadId: String): StackFrame? = mutex.withLock {
 
         val stack = threadStack(threadId)
         if (stack.isEmpty) {
@@ -213,8 +207,6 @@ class Context private constructor(
 
         data.removeAll()
         unregisterListeners()
-        mutatorContext.cancel()
-        mutatorContext.close()
     }
 
     override fun toString(): String = data.toPrettyString()

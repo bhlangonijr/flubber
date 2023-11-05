@@ -4,13 +4,10 @@ import com.github.bhlangonijr.flubber.context.Context.Companion.MAIN_THREAD_ID
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.util.Util.Companion.loadResource
 import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
-import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
 class ContextTest {
 
@@ -135,19 +132,6 @@ class ContextTest {
         context.unregisterListeners()
         context.invokeOnCompleteListeners()
         assertEquals(0, counter.get())
-    }
-
-    @Test
-    fun `test context closing`() = runBlocking {
-
-        val context = Context.load(loadResource("/context-sample.json"))
-        context.setVariable("test", makeJson())
-        context.close()
-
-        val exception: Exception = assertThrows {
-            context.setVariable("test2", makeJson())
-        }
-        assertTrue(exception is CancellationException )
     }
 
 }

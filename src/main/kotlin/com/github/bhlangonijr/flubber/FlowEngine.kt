@@ -45,7 +45,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 @OptIn(DelicateCoroutinesApi::class)
@@ -164,15 +163,13 @@ class FlowEngine {
         var exceptionThrown = false
         while (context.running(threadId)) {
             try {
-                withContext(context.mutatorContext) {
-                    val childThreads = getRunningChildThreads(context, threadId)
-                    if (childThreads > 1 && context.threadStateValue(threadId) == ExecutionState.RUNNING) {
-                        context.setThreadState(threadId, ExecutionState.WAITING)
-                        logger.trace { "Putting thread to sleep: $threadId, waiting children: $childThreads" }
-                    } else {
-                        executeOneStep(context, threadId)
+                val childThreads = getRunningChildThreads(context, threadId)
+                if (childThreads > 1 && context.threadStateValue(threadId) == ExecutionState.RUNNING) {
+                    context.setThreadState(threadId, ExecutionState.WAITING)
+                    logger.trace { "Putting thread to sleep: $threadId, waiting children: $childThreads" }
+                } else {
+                    executeOneStep(context, threadId)
 
-                    }
                 }
             } catch (exception: Exception) {
                 logger.debug(exception) { "Exception caught executing context" }
@@ -215,7 +212,7 @@ class FlowEngine {
         } ?: 0
     }
 
-    private suspend fun updateChildThreads(context: Context, threadId: String) = withContext(context.mutatorContext) {
+    private suspend fun updateChildThreads(context: Context, threadId: String) = coroutineScope {
 
         val parentThreadFieldId = "$threadId$PARENT_THREAD_FIELD"
         val parent = context.getVariable(parentThreadFieldId)?.asText()
@@ -288,7 +285,7 @@ class FlowEngine {
         }
     }
 
-    private suspend fun handleEndOfSequence(context: Context, threadId: String) = withContext(context.mutatorContext) {
+    private suspend fun handleEndOfSequence(context: Context, threadId: String) = coroutineScope {
 
         context.current(threadId)?.let {
             val currentAction = context.getAction(it, it.actionIndex)

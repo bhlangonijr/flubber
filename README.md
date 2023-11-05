@@ -1,14 +1,22 @@
-Flubber
-=========================
+**Flubber**: A Lightweight Workflow Engine for JSON DSL Script Execution
 
 [![](https://jitpack.io/v/bhlangonijr/flubber.svg)](https://jitpack.io/#bhlangonijr/flubber)
 
-Flubber is a simple kotlin/java library for building workflow and automation
-task [domain-specific languages](https://en.wikipedia.org/wiki/Domain-specific_language). 
-A typical use case is for example the creation of a chatbot DSL for a certain business. 
-One could do that by adding customized actions which can be used to send and receive messages 
-within the internal messaging system of that business. 
+Flubber is a versatile Kotlin-based library designed for constructing workflows and automation tasks using custom [domain-specific languages (DSLs)](https://en.wikipedia.org/wiki/Domain-specific_language). Its primary purpose is to empower developers to create tailored automation solutions, such as chatbot DSLs, uniquely suited for specific business needs.
 
+**Key Features:**
+
+- **DSL Development:** Flubber facilitates the creation of domain-specific languages by enabling you to define customized actions. These actions can be leveraged to interact with your business's internal messaging system, allowing you to send and receive messages seamlessly.
+
+- **Workflow Orchestration:** Flubber empowers you to orchestrate complex workflows, streamlining tasks, and automating processes within your application or system.
+
+- **Kotlin and Java Compatibility:** Whether you're working with Kotlin or Java, Flubber offers compatibility with both programming languages, giving you the flexibility to choose your preferred environment.
+
+- **Extensible and Lightweight:** Flubber is designed with extensibility in mind, allowing you to build on top of its core functionality to cater to your specific use cases. It is lightweight and easy to integrate into your projects.
+
+If you're looking for a practical way to build custom languages and streamline workflows, Flubber is a handy library to explore.
+
+Feel free to dive into Flubber today to simplify automation and tailor it to your business needs!
 
 # Building/Installing
 
@@ -42,7 +50,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
-    <version>0.4.2</version>
+    <version>0.4.5</version>
 </dependency>
 ```
 
@@ -58,16 +66,14 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.4.2'
+    implementation 'com.github.bhlangonijr:flubber:0.4.5'
     ...
 }
 ```
 
 # Usage
 
-The building blocks of any scripts are the actions: an external Javascript or Python file containing 
-a function having arguments `context` and `args`. 
-These actions can be served by any web server as dynamic/static content or as local files, e.g.,
+In this scripting language, the fundamental building blocks of any script are referred to as "actions." These actions are encapsulated within external JavaScript or Python files, each containing a function that accepts two arguments: context and args. These actions can be hosted on any web server as dynamic or static content or can be stored as local files. For example:
 
 ```javascript
 // hello action. Served by URL: https://localhost:8080/myserver/hello.js
@@ -79,9 +85,7 @@ var action = function(context, args) {
 
 ## Scripting a Hello World DSL
 
-The hello world script below writes a hello message in the console by using the custom action
-`hello` imported in the `script`: 
-
+To demonstrate the usage of this language, let's create a simple "Hello World" script. This script writes a welcome message to the console using a custom action named `hello`, which is imported into the script. The `hello` action is fetched from the specified URL:
 ```json
 {
   "import": [
