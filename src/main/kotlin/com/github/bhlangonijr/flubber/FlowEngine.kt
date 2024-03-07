@@ -41,6 +41,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import kotlinx.coroutines.Deferred
 import mu.KotlinLogging
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -126,7 +127,7 @@ class FlowEngine {
             runSequentially.invoke()
             if (processMonitorMap[context.id] == null) {
                 processMonitorMap[context.id] = context
-                launch {
+                launch(Dispatchers.IO) {
                     try {
                         logger.info { "Running: ${context.id}" }
                         runMainEventLoop(context)
@@ -214,22 +215,26 @@ class FlowEngine {
 
     private suspend fun updateChildThreads(context: Context, threadId: String) = coroutineScope {
 
-        val parentThreadFieldId = "$threadId$PARENT_THREAD_FIELD"
-        val parent = context.getVariable(parentThreadFieldId)?.asText()
-        parent?.let { parentThread ->
-            logger.trace { "[$threadId] State: ${context.threadStateValue(threadId)}, " +
-                    "parent: $parentThread$CHILD_THREADS_FIELD" }
-            val childThreadsFieldId = "$parentThread$CHILD_THREADS_FIELD"
-            val childThreads = context.getVariable(childThreadsFieldId)
-            childThreads?.let { child ->
-                logger.trace { "Child: ${child.toPrettyString()}" }
-                (child as ArrayNode).removeAll { it.asText() == threadId }
-                if (context.threadStateValue(parentThread) == ExecutionState.WAITING) {
-                    context.setThreadState(parentThread, ExecutionState.RUNNING)
-                    logger.trace { "Waking up thread: $threadId" }
+        withContext(dispatcherExecutor) {
+            val parentThreadFieldId = "$threadId$PARENT_THREAD_FIELD"
+            val parent = context.getVariable(parentThreadFieldId)?.asText()
+            parent?.let { parentThread ->
+                logger.trace {
+                    "[$threadId] State: ${context.threadStateValue(threadId)}, " +
+                            "parent: $parentThread$CHILD_THREADS_FIELD"
                 }
+                val childThreadsFieldId = "$parentThread$CHILD_THREADS_FIELD"
+                val childThreads = context.getVariable(childThreadsFieldId)
+                childThreads?.let { child ->
+                    logger.trace { "Child: ${child.toPrettyString()}" }
+                    (child as ArrayNode).removeAll { it.asText() == threadId }
+                    if (context.threadStateValue(parentThread) == ExecutionState.WAITING) {
+                        context.setThreadState(parentThread, ExecutionState.RUNNING)
+                        logger.trace { "Waking up thread: $threadId" }
+                    }
+                }
+                context.unsetVariable(parentThreadFieldId)
             }
-            context.unsetVariable(parentThreadFieldId)
         }
     }
 
@@ -259,19 +264,19 @@ class FlowEngine {
                 if (args[ASYNC_FIELD] == true) {
                     context.setThreadState(threadId, ExecutionState.WAITING)
                 }
+                async {
+                    val result = executeAction(context, action, args, globalArgs)
+                    populateActionResult(actionPath, context, args, result)
+                    context.push(threadId, StackFrame.create(
+                        path = actionPath,
+                        sequenceId = frame.sequenceId,
+                        actionIndex = frame.actionIndex,
+                        args = objectToNode(args),
+                        result = result
+                    ))
 
-                val result = executeAction(context, action, args, globalArgs)
-                populateActionResult(actionPath, context, args, result)
-
-                context.push(threadId, StackFrame.create(
-                    path = actionPath,
-                    sequenceId = frame.sequenceId,
-                    actionIndex = frame.actionIndex,
-                    args = objectToNode(args),
-                    result = result
-                ))
-
-                processActionResult(actionPath, context, args, action, threadId, result)
+                    processActionResult(actionPath, context, args, action, threadId, result)
+                }
             }
         } ?: run {
             logger.trace { "Empty next action: $threadId" }
@@ -286,18 +291,19 @@ class FlowEngine {
     }
 
     private suspend fun handleEndOfSequence(context: Context, threadId: String) = coroutineScope {
+        withContext(dispatcherExecutor) {
+            context.current(threadId)?.let {
+                val currentAction = context.getAction(it, it.actionIndex)
+                logger.trace("Next action: $currentAction")
+            } ?: run {
+                logger.trace { "End of sequence for: $threadId" }
+                // End of sequence, remove local variable references.
+                val fields = context.globalArgs.fieldNames().asSequence().toList()
 
-        context.current(threadId)?.let {
-            val currentAction = context.getAction(it, it.actionIndex)
-            logger.trace("Next action: $currentAction")
-        } ?: run {
-            logger.trace { "End of sequence for: $threadId" }
-            // End of sequence, remove local variable references.
-            val fields = context.globalArgs.fieldNames().asSequence().toList()
-
-            for (field in fields.filter { it.startsWith("$threadId-") }) {
-                logger.trace { "Removing: $field" }
-                context.unsetVariable(field)
+                for (field in fields.filter { it.startsWith("$threadId-") }) {
+                    logger.trace { "Removing: $field" }
+                    context.unsetVariable(field)
+                }
             }
         }
     }
