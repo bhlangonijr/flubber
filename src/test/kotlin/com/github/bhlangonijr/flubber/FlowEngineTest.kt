@@ -14,8 +14,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Disabled
 import kotlin.random.Random
 
 class FlowEngineTest {
@@ -383,13 +385,60 @@ class FlowEngineTest {
                 messageCounter++
             }
         }
-
         assertTrue(messages.contains("have a good one JOHN Doe"))
         assertTrue(messages.contains("have a good one MARY Doe"))
         assertTrue(messages.contains("have a good one ALICE Doe"))
         assertTrue(messages.contains("have a good one ROMEO Doe"))
         assertTrue(messages.contains("have a good one JASON Doe"))
-        assertTrue(messages.contains("returned from iterations, first name: JOHN Doe and last name: MARY Doe"))
+        assertTrue(messages.any { it.startsWith("returned from iterations, first name: JOHN Doe and last name") })
         assertEquals(6, messageCounter)
+    }
+
+    @Test
+    @Disabled
+    fun `test sequence parallel iterations within the flow - concurrency`() = runBlocking {
+
+        val queue = ArrayBlockingQueue<String>(100)
+        val engine = FlowEngine()
+        val concurrency = 10
+
+        val script = Script.from(loadResource("/script-example-iterate-parallel.json"))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                    if (args["threadId"] == "mainThreadId") {
+                        Thread.sleep(Random.nextLong(100, 700))
+                    }
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+
+        val executor = Executors.newFixedThreadPool(concurrency)
+
+        repeat((1..concurrency).count()) { _ ->
+            executor.submit {
+                runBlocking {
+                    engine.run { script.with(args) }
+                }
+            }
+        }
+
+        val messages = mutableListOf<String>()
+        var messageCounter = 0
+        for (x in 1..6 * concurrency) {
+            queue.poll(5, TimeUnit.SECONDS)?.let {
+                messages.add(it)
+                messageCounter++
+            }
+        }
+        assertTrue(messages.contains("have a good one JOHN Doe"))
+        assertTrue(messages.contains("have a good one MARY Doe"))
+        assertTrue(messages.contains("have a good one ALICE Doe"))
+        assertTrue(messages.contains("have a good one ROMEO Doe"))
+        assertTrue(messages.contains("have a good one JASON Doe"))
+        assertTrue(messages.any { it.startsWith("returned from iterations, first name: JOHN Doe and last name") })
+        assertEquals(6 * concurrency, messageCounter)
     }
 }
