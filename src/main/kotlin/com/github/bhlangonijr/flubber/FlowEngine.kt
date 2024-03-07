@@ -128,10 +128,13 @@ class FlowEngine {
             if (processMonitorMap[context.id] == null) {
                 processMonitorMap[context.id] = context
                 launch(Dispatchers.IO) {
-                    logger.info { "Running: ${context.id}" }
-                    runMainEventLoop(context)
+                    try {
+                        logger.info { "Running: ${context.id}" }
+                        runMainEventLoop(context)
+                    } finally {
+                        processMonitorMap.remove(context.id)
+                    }
                 }
-                processMonitorMap.remove(context.id)
             }
         }
     }
