@@ -50,7 +50,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
-    <version>0.4.5</version>
+    <version>0.4.6</version>
 </dependency>
 ```
 
@@ -66,7 +66,7 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.4.5'
+    implementation 'com.github.bhlangonijr:flubber:0.4.6'
     ...
 }
 ```
