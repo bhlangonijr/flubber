@@ -398,9 +398,9 @@ class FlowEngineTest {
     @Disabled
     fun `test sequence parallel iterations within the flow - concurrency`() = runBlocking {
 
-        val queue = ArrayBlockingQueue<String>(100)
+        val queue = ArrayBlockingQueue<String>(300)
         val engine = FlowEngine()
-        val concurrency = 10
+        val concurrency = 40
 
         val script = Script.from(loadResource("/script-example-iterate-parallel.json"))
         script.register("say") {
