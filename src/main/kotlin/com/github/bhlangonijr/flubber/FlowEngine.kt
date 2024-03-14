@@ -38,6 +38,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 import com.github.bhlangonijr.flubber.util.Util.Companion.makeJsonArray
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Deferred
 import mu.KotlinLogging
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -52,7 +53,7 @@ import kotlinx.coroutines.withContext
 class FlowEngine {
 
     private val logger = KotlinLogging.logger {}
-    private val processMonitorMap = mutableMapOf<String, Context>()
+    private val processMonitorMap = ConcurrentHashMap<String, Context>()
     private val dispatcherExecutor = newSingleThreadContext("dispatcher-thread")
 
     suspend fun run(context: () -> Context): Context = run(context.invoke())
@@ -123,17 +124,22 @@ class FlowEngine {
         runSequentially: suspend () -> Any? = {}
     ) = coroutineScope {
 
-        withContext(dispatcherExecutor) {
+        val result = withContext(dispatcherExecutor) {
             runSequentially.invoke()
             if (processMonitorMap[context.id] == null) {
                 processMonitorMap[context.id] = context
-                launch(Dispatchers.IO) {
-                    try {
-                        logger.info { "Running: ${context.id}" }
-                        runMainEventLoop(context)
-                    } finally {
-                        processMonitorMap.remove(context.id)
-                    }
+                true
+            } else {
+                false
+            }
+        }
+        if (result) {
+            launch(Dispatchers.Default) {
+                try {
+                    logger.info { "Running: ${context.id}" }
+                    runMainEventLoop(context)
+                } finally {
+                    processMonitorMap.remove(context.id)
                 }
             }
         }
@@ -164,13 +170,18 @@ class FlowEngine {
         var exceptionThrown = false
         while (context.running(threadId)) {
             try {
-                val childThreads = getRunningChildThreads(context, threadId)
-                if (childThreads > 1 && context.threadStateValue(threadId) == ExecutionState.RUNNING) {
-                    context.setThreadState(threadId, ExecutionState.WAITING)
-                    logger.trace { "Putting thread to sleep: $threadId, waiting children: $childThreads" }
-                } else {
+                val executeStep = withContext(dispatcherExecutor) {
+                    val childThreads = getRunningChildThreads(context, threadId)
+                    if (childThreads > 1 && context.threadStateValue(threadId) == ExecutionState.RUNNING) {
+                        context.setThreadState(threadId, ExecutionState.WAITING)
+                        logger.trace { "Putting thread to sleep: $threadId, waiting children: $childThreads" }
+                        false
+                    } else {
+                        true
+                    }
+                }
+                if (executeStep) {
                     executeOneStep(context, threadId)
-
                 }
             } catch (exception: Exception) {
                 logger.debug(exception) { "Exception caught executing context" }
@@ -264,19 +275,17 @@ class FlowEngine {
                 if (args[ASYNC_FIELD] == true) {
                     context.setThreadState(threadId, ExecutionState.WAITING)
                 }
-                async {
-                    val result = executeAction(context, action, args, globalArgs)
-                    populateActionResult(actionPath, context, args, result)
-                    context.push(threadId, StackFrame.create(
-                        path = actionPath,
-                        sequenceId = frame.sequenceId,
-                        actionIndex = frame.actionIndex,
-                        args = objectToNode(args),
-                        result = result
-                    ))
 
-                    processActionResult(actionPath, context, args, action, threadId, result)
-                }
+                val result = executeAction(context, action, args, globalArgs)
+                populateActionResult(actionPath, context, args, result)
+                context.push(threadId, StackFrame.create(
+                    path = actionPath,
+                    sequenceId = frame.sequenceId,
+                    actionIndex = frame.actionIndex,
+                    args = objectToNode(args),
+                    result = result
+                ))
+                processActionResult(actionPath, context, args, action, threadId, result)
             }
         } ?: run {
             logger.trace { "Empty next action: $threadId" }

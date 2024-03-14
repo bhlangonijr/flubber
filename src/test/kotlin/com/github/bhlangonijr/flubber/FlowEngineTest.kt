@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.action.Action
 import com.github.bhlangonijr.flubber.action.JavascriptAction
 import com.github.bhlangonijr.flubber.action.PythonAction
+import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.ExecutionState
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.script.ScriptException
@@ -398,9 +399,9 @@ class FlowEngineTest {
     @Disabled
     fun `test sequence parallel iterations within the flow - concurrency`() = runBlocking {
 
-        val queue = ArrayBlockingQueue<String>(100)
+        val queue = ArrayBlockingQueue<String>(300)
         val engine = FlowEngine()
-        val concurrency = 10
+        val concurrency = 40
 
         val script = Script.from(loadResource("/script-example-iterate-parallel.json"))
         script.register("say") {
@@ -440,5 +441,88 @@ class FlowEngineTest {
         assertTrue(messages.contains("have a good one JASON Doe"))
         assertTrue(messages.any { it.startsWith("returned from iterations, first name: JOHN Doe and last name") })
         assertEquals(6 * concurrency, messageCounter)
+    }
+
+    @Test
+    @Disabled
+    fun `test async sequence iterations within the flow - concurrency`() = runBlocking {
+
+        val queue = ArrayBlockingQueue<String>(1200)
+        val queueRequest = mutableMapOf<String, ArrayBlockingQueue<JsonNode>>()
+        val engine = FlowEngine()
+        val concurrency = 200
+
+        val init = System.currentTimeMillis()
+        val script = Script.from(loadResource("/script-example-async.json"))
+        script.register("answer", JavascriptAction(answerAction))
+        script.register("hangup", JavascriptAction(hangupAction))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+        script.register("waitOnDigits", JavascriptAction(
+        """
+        var action = function(context, args) {
+            var result = {
+              "callback": true,
+              "threadId": args.threadId
+            }
+            return result;
+        }   
+        """.trimIndent()
+            )
+        )
+
+        val executor = Executors.newFixedThreadPool(concurrency)
+        val contexts = mutableListOf<Context>()
+        repeat((1..concurrency).count()) { _ ->
+            val context = script.with(args)
+            queueRequest[context.id] = ArrayBlockingQueue<JsonNode>(1200)
+            executor.submit {
+                runBlocking {
+                    context.onAction { node, _, result ->
+                        if (node["action"]?.asText() == "waitOnDigits") {
+                            queueRequest[context.id]?.offer(objectToNode(result!!))
+                        }
+                    }
+                    engine.run { context }
+                }
+            }
+            contexts.add(context)
+        }
+
+        contexts.forEach { context ->
+            queueRequest[context.id]?.poll(30, TimeUnit.SECONDS)?.let {
+                //fake external service response
+                engine.run(
+                    context, Callback.from(""" 
+                                {
+                                  "threadId": "${it["threadId"].asText()}",
+                                  "result": "1000"
+                                }
+                            """.trimIndent())
+                )
+                    .onException { e -> e.printStackTrace() }
+            }
+        }
+
+        val messages = mutableListOf<String>()
+        var messageCounter = 0
+        for (x in 1..3 * concurrency) {
+            queue.poll(10, TimeUnit.SECONDS)?.let {
+                messages.add(it)
+                messageCounter++
+                it
+            } ?: break
+        }
+        println("Total time: ${System.currentTimeMillis() - init}")
+        assertTrue(messages.contains("hello john doe, press 1000 to greet or 2000 to quit."))
+        assertTrue(messages.contains("have a good one john doe"))
+        assertTrue(messages.contains("bye john, returned from decision"))
+        assertEquals(3 * concurrency, messageCounter)
     }
 }
