@@ -39,7 +39,7 @@ class Context private constructor(
         const val EXCEPTION_FIELD = "exception"
         const val SEQUENCE_TYPE_FIELD = "sequenceType"
         const val ELEMENTS_FIELD = "_elements"
-        const val MAX_STACK_SIZE = 50
+        const val MAX_STACK_SIZE = 300
         const val MAIN_THREAD_ID = "mainThreadId"
         const val PATH_FIELD = "path"
         const val CHILD_THREADS_FIELD = "_childThreads"
