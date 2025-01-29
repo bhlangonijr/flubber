@@ -305,7 +305,7 @@ class FlowEngine {
         withContext(dispatcherExecutor) {
             context.current(threadId)?.let {
                 val currentAction = context.getAction(it, it.actionIndex)
-                logger.trace("Next action: $currentAction")
+                logger.trace("Next action: {}", currentAction)
             } ?: run {
                 logger.trace { "End of sequence for: $threadId" }
                 // End of sequence, remove local variable references.

@@ -15,7 +15,10 @@ class Util {
 
         private val mapper = ObjectMapper().registerKotlinModule()
 
-        fun loadResource(name: String): String = this::class.java.getResource(name).readText(Charsets.UTF_8)
+        fun loadResource(name: String): String {
+            return this::class.java.getResource(name)?.readText(Charsets.UTF_8)
+                ?: throw IllegalArgumentException("Resource not found: $name")
+        }
 
         fun nodeToMap(node: JsonNode): MutableMap<String, Any?> =
             mapper.convertValue(node, object : TypeReference<MutableMap<String, Any?>>() {})
@@ -28,60 +31,67 @@ class Util {
             globalArgs: JsonNode,
             replaceBlank: Boolean = false
         ) {
-            for (entry in args.entries) {
-                if (entry.value is Map<*, *>) {
-                    @Suppress("UNCHECKED_CAST")
-                    bindVars(fullPath, entry.value as MutableMap<String, Any?>, globalArgs)
-                } else if (entry.value is List<*>) {
-                    val list = entry.value as List<*>
-                    if (list.isNotEmpty() && list.all { it is String }) {
-                        args[entry.key] = list.map {
-                            bindVarInString(it as String, replaceBlank, globalArgs, fullPath)
-                        }
-                    } else {
-                        list.forEach {
-                            if (it is MutableMap<*, *>) {
-                                @Suppress("UNCHECKED_CAST")
-                                bindVars(fullPath, it as MutableMap<String, Any?>, globalArgs)
-                            }
-                        }
+            args.entries.forEach { (key, value) ->
+                when (value) {
+                    is Map<*, *> -> {
+                        @Suppress("UNCHECKED_CAST")
+                        bindVars(fullPath, value as MutableMap<String, Any?>, globalArgs, replaceBlank)
                     }
-                } else if (entry.value is String) {
-                    val text = entry.value as String
-                    args[entry.key] = bindVarInString(text, replaceBlank, globalArgs, fullPath)
+                    is List<*> -> {
+                        args[key] = processList(value, fullPath, globalArgs, replaceBlank)
+                    }
+                    is String -> {
+                        args[key] = bindVarInString(value, replaceBlank, globalArgs, fullPath)
+                    }
                 }
             }
         }
 
+        private fun processList(
+            list: List<*>,
+            fullPath: String,
+            globalArgs: JsonNode,
+            replaceBlank: Boolean
+        ): Any {
+            return if (list.isNotEmpty() && list.all { it is String }) {
+                list.map { bindVarInString(it as String, replaceBlank, globalArgs, fullPath) }
+            } else {
+                list.forEach {
+                    if (it is MutableMap<*, *>) {
+                        @Suppress("UNCHECKED_CAST")
+                        bindVars(fullPath, it as MutableMap<String, Any?>, globalArgs, replaceBlank)
+                    }
+                }
+                list
+            }
+        }
+
         private fun bindVarInString(
-            text: String, replaceBlank: Boolean,
+            text: String,
+            replaceBlank: Boolean,
             globalArgs: JsonNode,
             fullPath: String
         ): String {
             var newText = text
-            if (text.indexOf("}}") > text.indexOf("{{")) {
-                val vars = text.split("}}")
-                    .filter { it.contains("{{") }
-                    .map { it.split("{{")[1] }
-                for (variable in vars) {
-                    val path = "$fullPath$variable".replace(".", "/")
-                    val resolved = globalArgs.at("/$path").asText()
-                    if (resolved.isNotEmpty() || replaceBlank) {
-                        newText = newText.replace("{{$variable}}", resolved)
-                    }
+            val regex = Regex("""\{\{(.*?)\}\}""")
+            regex.findAll(text).forEach { matchResult ->
+                val variable = matchResult.groupValues[1]
+                val path = "$fullPath$variable".replace(".", "/")
+                val resolved = globalArgs.at("/$path").asText()
+                if (resolved.isNotEmpty() || replaceBlank) {
+                    newText = newText.replace("{{$variable}}", resolved)
                 }
             }
             return newText
         }
 
         fun jsonException(e: Throwable): JsonNode {
-            val details = mapper.createObjectNode()
-            details.put("message", e.message)
-            e.cause?.message?.let { details.put("cause", it) }
-            details.put("stacktrace", e.stackTraceToString())
-            val node = mapper.createObjectNode()
-            node.set<ObjectNode>(EXCEPTION_FIELD, details)
-            return node
+            val details = mapper.createObjectNode().apply {
+                put("message", e.message)
+                e.cause?.message?.let { put("cause", it) }
+                put("stacktrace", e.stackTraceToString())
+            }
+            return mapper.createObjectNode().set<ObjectNode>(EXCEPTION_FIELD, details)
         }
 
         fun makeJson(): ObjectNode = mapper.createObjectNode()
