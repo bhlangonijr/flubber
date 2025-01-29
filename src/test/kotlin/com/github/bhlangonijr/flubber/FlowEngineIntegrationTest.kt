@@ -1,6 +1,5 @@
 package com.github.bhlangonijr.flubber
 
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.action.Action
 import com.github.bhlangonijr.flubber.script.Script
@@ -33,10 +32,10 @@ class FlowEngineIntegrationTest {
 
         scriptWithImports.register("waitOnDigits") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     val input = "1000"
-                    args["set"]?.let { (context as ObjectNode).put(it as String, input) }
-                    args["set"]?.let { (context as ObjectNode).put("COMPLETED", true) }
+                    args["set"]?.let { context.put(it as String, input) }
+                    args["set"]?.let { context.put("COMPLETED", true) }
                     return input
                 }
             }
@@ -69,7 +68,7 @@ class FlowEngineIntegrationTest {
         """
         scriptWithRest.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"]?.toString() ?: "")
                     return emptyMap<String, String>()
                 }

@@ -43,6 +43,7 @@ import kotlinx.coroutines.Deferred
 import mu.KotlinLogging
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -54,6 +55,7 @@ class FlowEngine {
 
     private val logger = KotlinLogging.logger {}
     private val processMonitorMap = ConcurrentHashMap<String, Context>()
+    @OptIn(ExperimentalCoroutinesApi::class)
     private val dispatcherExecutor = newSingleThreadContext("dispatcher-thread")
 
     suspend fun run(context: () -> Context): Context = run(context.invoke())

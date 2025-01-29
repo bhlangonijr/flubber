@@ -1,6 +1,6 @@
 package com.github.bhlangonijr.flubber.action
 
-import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.script.Script.Companion.EXIT_NODE_FIELD_NAME
 
 val exitResult = mapOf(Pair(EXIT_NODE_FIELD_NAME, true))
@@ -10,7 +10,7 @@ val exitResult = mapOf(Pair(EXIT_NODE_FIELD_NAME, true))
  */
 class ExitAction : Action {
 
-    override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+    override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
 
         return exitResult
     }
