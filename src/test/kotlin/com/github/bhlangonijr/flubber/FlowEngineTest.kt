@@ -446,7 +446,7 @@ class FlowEngineTest {
     @Test
     @Disabled
     fun `test async sequence iterations within the flow - concurrency`() = runBlocking {
-        val queue = ArrayBlockingQueue<String>(120000)
+        val queue = ArrayBlockingQueue<String>(12000)
         val queueRequest = mutableMapOf<String, ArrayBlockingQueue<JsonNode>>()
         val engine = FlowEngine()
         val concurrency = 400

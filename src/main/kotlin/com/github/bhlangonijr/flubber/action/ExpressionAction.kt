@@ -1,13 +1,9 @@
 package com.github.bhlangonijr.flubber.action
 
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.oracle.truffle.js.scriptengine.GraalJSScriptEngine
+import com.github.bhlangonijr.flubber.util.ScriptEngineUtil
 import javax.script.Invocable
 import javax.script.ScriptEngine
-import org.graalvm.polyglot.Context
-import org.graalvm.polyglot.HostAccess
-
 
 /**
  * Executes de do-else block depending on the result of the expression
@@ -16,14 +12,7 @@ import org.graalvm.polyglot.HostAccess
 class ExpressionAction: Action {
 
     override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
-        val engine: ScriptEngine = GraalJSScriptEngine.create(null,
-            Context.newBuilder("js")
-                .allowHostAccess(HostAccess.ALL)
-                .allowNativeAccess(true)
-                .allowHostClassLookup { true }
-                .allowExperimentalOptions(true)
-                .allowCreateThread(true)
-                .option("js.nashorn-compat", "true"))
+        val engine: ScriptEngine = ScriptEngineUtil.getThreadLocalInstance()
         val expression = args["condition"] ?: args["text"]
         engine.eval("var expression = function(context, args) { return ($expression) }")
         val invocable = engine as Invocable
