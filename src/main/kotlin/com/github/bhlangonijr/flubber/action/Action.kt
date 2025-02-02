@@ -1,6 +1,6 @@
 package com.github.bhlangonijr.flubber.action
 
-import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 
 /**
  * Building block of the script for implementing specific script actions
@@ -8,5 +8,5 @@ import com.fasterxml.jackson.databind.JsonNode
 
 interface Action {
 
-    fun execute(context: JsonNode, args: Map<String, Any?>): Any?
+    fun execute(context: ObjectNode, args: Map<String, Any?>): Any?
 }

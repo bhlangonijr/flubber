@@ -1,6 +1,6 @@
 package com.github.bhlangonijr.flubber.action
 
-import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import javax.script.Invocable
 import javax.script.ScriptEngine
 import javax.script.ScriptEngineManager
@@ -11,7 +11,7 @@ class PythonAction constructor(
     private val engine: ScriptEngine = getPythonEngine()
 ) : Action {
 
-    override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+    override fun execute(context: ObjectNode, args: Map<String, Any?>): Any? {
 
         engine.eval(script)
         val invocable = engine as Invocable

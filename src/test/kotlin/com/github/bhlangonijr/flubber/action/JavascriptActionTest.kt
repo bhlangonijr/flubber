@@ -1,6 +1,7 @@
 package com.github.bhlangonijr.flubber.action
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
@@ -18,11 +19,12 @@ class JavascriptActionTest {
         val script = """
             var action = function(context, args) {
                 // do stuff
-                context.put("action", "OK")
+                context.put("action", "OK");
                 return "Hello " + args.arg1;
             }
         """
-        val context = mapper.readTree("{}")
+        val context = mapper.readTree("{}") as ObjectNode
+        context.put("action", "OK")
         val result = JavascriptAction(script)
             .execute(context, mutableMapOf(Pair("arg1", "world")))
 
@@ -39,7 +41,7 @@ class JavascriptActionTest {
                 return result;
             }
         """
-        val context = mapper.readTree("{}")
+        val context = mapper.readTree("{}") as ObjectNode
         val result = JavascriptAction(script)
             .execute(context, mutableMapOf(Pair("arg1", "world")))
 

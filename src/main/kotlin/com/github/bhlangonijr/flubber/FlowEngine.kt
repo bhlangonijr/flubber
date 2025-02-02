@@ -39,10 +39,12 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.makeJsonArray
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
 import mu.KotlinLogging
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -50,10 +52,11 @@ import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withContext
 
 @OptIn(DelicateCoroutinesApi::class)
-class FlowEngine {
+class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers.IO) {
 
     private val logger = KotlinLogging.logger {}
     private val processMonitorMap = ConcurrentHashMap<String, Context>()
+    @OptIn(ExperimentalCoroutinesApi::class)
     private val dispatcherExecutor = newSingleThreadContext("dispatcher-thread")
 
     suspend fun run(context: () -> Context): Context = run(context.invoke())
@@ -134,7 +137,7 @@ class FlowEngine {
             }
         }
         if (result) {
-            launch(Dispatchers.Default) {
+            launch(workerDispatcher) {
                 try {
                     logger.info { "Running: ${context.id}" }
                     runMainEventLoop(context)
@@ -303,7 +306,7 @@ class FlowEngine {
         withContext(dispatcherExecutor) {
             context.current(threadId)?.let {
                 val currentAction = context.getAction(it, it.actionIndex)
-                logger.trace("Next action: $currentAction")
+                logger.trace("Next action: {}", currentAction)
             } ?: run {
                 logger.trace { "End of sequence for: $threadId" }
                 // End of sequence, remove local variable references.

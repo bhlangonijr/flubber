@@ -2,8 +2,8 @@ package com.github.bhlangonijr.flubber.action
 
 import com.bazaarvoice.jolt.Chainr
 import com.bazaarvoice.jolt.JsonUtils
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 
@@ -16,7 +16,7 @@ class ParseJsonAction : Action {
         private val objectMapper = ObjectMapper().registerKotlinModule()
     }
 
-    override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+    override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
 
         val json = args["text"]?.toString() ?: "{}"
         val result = args["spec"]?.toString()?.let { spec ->

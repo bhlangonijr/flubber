@@ -2,6 +2,7 @@ package com.github.bhlangonijr.flubber.action
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ArrayNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.Context.Companion.ELEMENTS_FIELD
 import com.github.bhlangonijr.flubber.context.Context.Companion.PATH_FIELD
@@ -20,7 +21,7 @@ class ForEachAction : Action {
         const val DEFAULT_SET_FOREACH_ELEMENT_FIELD_NAME = "iterationElement"
     }
 
-    override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+    override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
 
         val iterateOverNode = args[ITERATE_OVER_FIELD_NAME]?.let {
             val actionPath = args[PATH_FIELD]

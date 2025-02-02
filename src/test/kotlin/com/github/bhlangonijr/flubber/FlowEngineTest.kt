@@ -46,7 +46,7 @@ class FlowEngineTest {
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -54,9 +54,9 @@ class FlowEngineTest {
         }
         script.register("waitOnDigits") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     val input = "1000"
-                    args["set"]?.let { (context as ObjectNode).put(it as String, input) }
+                    args["set"]?.let { context.put(it as String, input) }
                     return input
                 }
             }
@@ -78,7 +78,7 @@ class FlowEngineTest {
         val script = Script.from(loadResource("/script-example-run.json"))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any? {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any? {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -104,7 +104,7 @@ class FlowEngineTest {
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -164,7 +164,7 @@ class FlowEngineTest {
         script.register("say", PythonAction(sayAction))
         script.register("hangup") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["reference"] as String)
                     return "ok"
                 }
@@ -206,7 +206,7 @@ class FlowEngineTest {
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -258,7 +258,7 @@ class FlowEngineTest {
     fun `test script hooks`() = runBlocking {
 
         val queue = ArrayBlockingQueue<String>(3)
-        val queueRequest = ArrayBlockingQueue<JsonNode>(2)
+        val queueRequest = ArrayBlockingQueue<ObjectNode>(2)
         val engine = FlowEngine()
 
         val script = Script.from(loadResource("/script-example-async.json"))
@@ -266,7 +266,7 @@ class FlowEngineTest {
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -289,7 +289,7 @@ class FlowEngineTest {
         val context = script.with(args)
         context.onAction { node, _, result ->
             if (node["action"]?.asText() == "waitOnDigits") {
-                queueRequest.offer(objectToNode(result!!))
+                queueRequest.offer(objectToNode(result!!) as ObjectNode)
             }
         }
         engine.run { context }
@@ -323,7 +323,7 @@ class FlowEngineTest {
         val script = Script.from(loadResource("/script-example-iterate.json"))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -346,7 +346,7 @@ class FlowEngineTest {
         val script = Script.from(loadResource("/script-example-menu.json"))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -367,7 +367,7 @@ class FlowEngineTest {
         val script = Script.from(loadResource("/script-example-iterate-parallel.json"))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     if (args["threadId"] == "mainThreadId") {
                         Thread.sleep(Random.nextLong(100, 700))
                     }
@@ -401,12 +401,12 @@ class FlowEngineTest {
 
         val queue = ArrayBlockingQueue<String>(300)
         val engine = FlowEngine()
-        val concurrency = 40
+        val concurrency = 400
 
         val script = Script.from(loadResource("/script-example-iterate-parallel.json"))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     if (args["threadId"] == "mainThreadId") {
                         Thread.sleep(Random.nextLong(100, 700))
                     }
@@ -446,11 +446,10 @@ class FlowEngineTest {
     @Test
     @Disabled
     fun `test async sequence iterations within the flow - concurrency`() = runBlocking {
-
-        val queue = ArrayBlockingQueue<String>(1200)
+        val queue = ArrayBlockingQueue<String>(12000)
         val queueRequest = mutableMapOf<String, ArrayBlockingQueue<JsonNode>>()
         val engine = FlowEngine()
-        val concurrency = 200
+        val concurrency = 400
 
         val init = System.currentTimeMillis()
         val script = Script.from(loadResource("/script-example-async.json"))
@@ -458,7 +457,7 @@ class FlowEngineTest {
         script.register("hangup", JavascriptAction(hangupAction))
         script.register("say") {
             object : Action {
-                override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
                     queue.offer(args["text"] as String)
                     return "ok"
                 }
@@ -496,7 +495,7 @@ class FlowEngineTest {
         }
 
         contexts.forEach { context ->
-            queueRequest[context.id]?.poll(30, TimeUnit.SECONDS)?.let {
+            queueRequest[context.id]?.poll(3000, TimeUnit.SECONDS)?.let {
                 //fake external service response
                 engine.run(
                     context, Callback.from(""" 

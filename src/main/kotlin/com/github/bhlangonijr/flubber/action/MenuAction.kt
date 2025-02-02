@@ -2,6 +2,7 @@ package com.github.bhlangonijr.flubber.action
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ArrayNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.github.bhlangonijr.flubber.util.Util
 import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 
@@ -10,7 +11,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
  */
 class MenuAction : Action {
 
-    override fun execute(context: JsonNode, args: Map<String, Any?>): Any {
+    override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
 
         val received = args["text"].toString().lowercase().trim()
         return args["options"]?.let { optionsArg ->
