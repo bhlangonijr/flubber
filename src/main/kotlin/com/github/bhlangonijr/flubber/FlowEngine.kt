@@ -39,6 +39,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.makeJsonArray
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
 import mu.KotlinLogging
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -51,7 +52,7 @@ import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withContext
 
 @OptIn(DelicateCoroutinesApi::class)
-class FlowEngine {
+class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers.IO) {
 
     private val logger = KotlinLogging.logger {}
     private val processMonitorMap = ConcurrentHashMap<String, Context>()
@@ -136,7 +137,7 @@ class FlowEngine {
             }
         }
         if (result) {
-            launch(Dispatchers.Default) {
+            launch(workerDispatcher) {
                 try {
                     logger.info { "Running: ${context.id}" }
                     runMainEventLoop(context)

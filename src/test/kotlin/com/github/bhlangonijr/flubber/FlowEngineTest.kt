@@ -401,7 +401,7 @@ class FlowEngineTest {
 
         val queue = ArrayBlockingQueue<String>(300)
         val engine = FlowEngine()
-        val concurrency = 40
+        val concurrency = 400
 
         val script = Script.from(loadResource("/script-example-iterate-parallel.json"))
         script.register("say") {
@@ -446,11 +446,10 @@ class FlowEngineTest {
     @Test
     @Disabled
     fun `test async sequence iterations within the flow - concurrency`() = runBlocking {
-
-        val queue = ArrayBlockingQueue<String>(1200)
+        val queue = ArrayBlockingQueue<String>(120000)
         val queueRequest = mutableMapOf<String, ArrayBlockingQueue<JsonNode>>()
         val engine = FlowEngine()
-        val concurrency = 200
+        val concurrency = 400
 
         val init = System.currentTimeMillis()
         val script = Script.from(loadResource("/script-example-async.json"))
@@ -496,7 +495,7 @@ class FlowEngineTest {
         }
 
         contexts.forEach { context ->
-            queueRequest[context.id]?.poll(30, TimeUnit.SECONDS)?.let {
+            queueRequest[context.id]?.poll(3000, TimeUnit.SECONDS)?.let {
                 //fake external service response
                 engine.run(
                     context, Callback.from(""" 
