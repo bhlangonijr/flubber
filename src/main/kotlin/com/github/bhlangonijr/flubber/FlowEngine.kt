@@ -328,8 +328,8 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
     ) = coroutineScope {
         args[THREAD_ID_FIELD] = threadId
         args[PATH_FIELD] = actionPath
-        bindVars("", args, globalArgs)
-        bindVars(actionPath, args, globalArgs, true)
+        bindVars(actionPath, args, globalArgs)
+        bindVars("", args, globalArgs, true)
     }
 
     private suspend fun executeAction(
@@ -464,8 +464,8 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
         val elements = iterateOverMap[ELEMENTS_FIELD] as ArrayNode?
         val globalArgs = context.globalArgs
         blockArgValues?.let { bindVars("", blockArgs, it) }
-        bindVars("", blockArgs, globalArgs)
-        bindVars(currentPath, blockArgs, globalArgs, true)
+        bindVars(currentPath, blockArgs, globalArgs)
+        bindVars("", blockArgs, globalArgs, true)
 
         elements?.let {
             unrollIterationFlow(
