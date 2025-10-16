@@ -348,6 +348,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
         if (actionFunction == null) {
             throw ActionNotFoundException("Action is not registered: [$actionName]")
         } else {
+            context.invokeBeforeActionListeners(action, args)
             val result = actionFunction.execute(globalArgs, args)
             logger.debug { "Called [$actionName] with args [$args] and result: [$result] " }
             result
