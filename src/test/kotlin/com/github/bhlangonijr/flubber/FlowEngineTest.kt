@@ -96,6 +96,7 @@ class FlowEngineTest {
 
         val queue = ArrayBlockingQueue<String>(3)
         val queueRequest = ArrayBlockingQueue<JsonNode>(2)
+        val queueBeforeActionRequest = ArrayBlockingQueue<JsonNode>(3)
         val queueState = ArrayBlockingQueue<ExecutionState>(5)
         val engine = FlowEngine()
 
@@ -132,6 +133,9 @@ class FlowEngineTest {
         }.onStateChange { _, state ->
             queueState.offer(state)
         }
+        context.onBeforeAction {
+            node, _ -> queueBeforeActionRequest.offer(node)
+        }
         engine.run { context }
 
         queueRequest.poll(5, TimeUnit.SECONDS)?.let {
@@ -148,6 +152,7 @@ class FlowEngineTest {
             ).onException { e -> e.printStackTrace() }
         }
         (1..3).forEach { _ -> queue.poll(5, TimeUnit.SECONDS) }
+        (1..3).forEach { _ -> queueBeforeActionRequest.poll(5, TimeUnit.SECONDS) }
         assertEquals(ExecutionState.RUNNING, queueState.poll(5, TimeUnit.SECONDS))
         assertEquals(ExecutionState.WAITING, queueState.poll(5, TimeUnit.SECONDS))
         assertEquals(ExecutionState.FINISHED, queueState.poll(5, TimeUnit.SECONDS))

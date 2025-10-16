@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode
 import kotlinx.coroutines.coroutineScope
 
 typealias ActionEvent = suspend (node: JsonNode, args: MutableMap<String, Any?>, result: Any?) -> Unit
+typealias BeforeActionEvent = suspend (node: JsonNode, args: MutableMap<String, Any?>) -> Unit
 typealias StateEvent = suspend (threadId: String, state: ExecutionState) -> Unit
 
 open class ContextExecutionListener {
 
     private val actionListeners: MutableList<ActionEvent> = mutableListOf()
+    private val beforeActionListeners: MutableList<BeforeActionEvent> = mutableListOf()
     private val stateListeners: MutableList<StateEvent> = mutableListOf()
     private val onCompleteListeners: MutableList<suspend () -> Unit> = mutableListOf()
     private val exceptionListeners: MutableList<suspend (e: Throwable) -> Unit> = mutableListOf()
@@ -22,6 +24,17 @@ open class ContextExecutionListener {
     ): ContextExecutionListener = coroutineScope {
 
         actionListeners.add(action)
+        return@coroutineScope this@ContextExecutionListener
+    }
+
+    suspend fun onBeforeAction(
+        action: suspend (
+            node: JsonNode,
+            args: MutableMap<String, Any?>
+        ) -> Unit
+    ): ContextExecutionListener = coroutineScope {
+
+        beforeActionListeners.add(action)
         return@coroutineScope this@ContextExecutionListener
     }
 
@@ -46,6 +59,11 @@ open class ContextExecutionListener {
     suspend fun invokeActionListeners(node: JsonNode, args: MutableMap<String, Any?>, result: Any?) = coroutineScope {
 
         actionListeners.forEach { it.invoke(node, args, result) }
+    }
+
+    suspend fun invokeBeforeActionListeners(node: JsonNode, args: MutableMap<String, Any?>) = coroutineScope {
+
+        beforeActionListeners.forEach { it.invoke(node, args) }
     }
 
     suspend fun invokeStateListeners(threadId: String, state: ExecutionState) = coroutineScope {
