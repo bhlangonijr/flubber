@@ -1,6 +1,7 @@
 package com.github.bhlangonijr.flubber.context
 
 import com.fasterxml.jackson.databind.JsonNode
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.coroutineScope
 import mu.KotlinLogging
 
@@ -11,11 +12,11 @@ typealias StateEvent = suspend (threadId: String, state: ExecutionState) -> Unit
 open class ContextExecutionListener {
 
     private val logger = KotlinLogging.logger {}
-    private val actionListeners: MutableList<ActionEvent> = mutableListOf()
-    private val beforeActionListeners: MutableList<BeforeActionEvent> = mutableListOf()
-    private val stateListeners: MutableList<StateEvent> = mutableListOf()
-    private val onCompleteListeners: MutableList<suspend () -> Unit> = mutableListOf()
-    private val exceptionListeners: MutableList<suspend (e: Throwable) -> Unit> = mutableListOf()
+    private val actionListeners: MutableList<ActionEvent> = CopyOnWriteArrayList()
+    private val beforeActionListeners: MutableList<BeforeActionEvent> = CopyOnWriteArrayList()
+    private val stateListeners: MutableList<StateEvent> = CopyOnWriteArrayList()
+    private val onCompleteListeners: MutableList<suspend () -> Unit> = CopyOnWriteArrayList()
+    private val exceptionListeners: MutableList<suspend (e: Throwable) -> Unit> = CopyOnWriteArrayList()
 
     suspend fun onAction(
         action: suspend (

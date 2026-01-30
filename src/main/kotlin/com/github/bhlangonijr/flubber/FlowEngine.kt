@@ -38,6 +38,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 import com.github.bhlangonijr.flubber.util.Util.Companion.makeJsonArray
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
+import java.io.Closeable
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
@@ -53,12 +54,17 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 
 @OptIn(DelicateCoroutinesApi::class)
-class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers.IO) {
+class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers.IO) : Closeable {
 
     private val logger = KotlinLogging.logger {}
     private val processMonitorMap = ConcurrentHashMap<String, Context>()
     @OptIn(ExperimentalCoroutinesApi::class)
     private val dispatcherExecutor = newSingleThreadContext("dispatcher-thread")
+
+    override fun close() {
+        @OptIn(ExperimentalCoroutinesApi::class)
+        dispatcherExecutor.close()
+    }
 
     suspend fun run(context: () -> Context): Context = run(context.invoke())
 
@@ -147,13 +153,19 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
                     } finally {
                         // Atomically remove from map and check if context became
                         // runnable again (e.g. a callback/hook arrived while loop was exiting).
-                        shouldRun = withContext(dispatcherExecutor) {
-                            processMonitorMap.remove(context.id)
-                            val stillRunning = context.isRunning()
-                            if (stillRunning) {
-                                processMonitorMap[context.id] = context
+                        shouldRun = try {
+                            withContext(dispatcherExecutor) {
+                                processMonitorMap.remove(context.id)
+                                val stillRunning = context.isRunning()
+                                if (stillRunning) {
+                                    processMonitorMap[context.id] = context
+                                }
+                                stillRunning
                             }
-                            stillRunning
+                        } catch (e: Exception) {
+                            logger.warn(e) { "Error during event loop cleanup for context ${context.id}" }
+                            processMonitorMap.remove(context.id)
+                            false
                         }
                     }
                 }
@@ -260,7 +272,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
                 val childThreads = context.getVariable(childThreadsFieldId)
                 childThreads?.let { child ->
                     logger.trace { "Child: ${child.toPrettyString()}" }
-                    (child as ArrayNode).removeAll { it.asText() == threadId }
+                    (child as? ArrayNode)?.removeAll { it.asText() == threadId }
                     if (context.threadStateValue(parentThread) == ExecutionState.WAITING) {
                         context.setThreadState(parentThread, ExecutionState.RUNNING)
                         logger.trace { "Waking up thread: $threadId" }
@@ -481,7 +493,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
         val currentPath = path ?: "$threadId-"
         val nextSequence = "$currentPath$sequenceId-"
         val blockArgs = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
-        val elements = iterateOverMap[ELEMENTS_FIELD] as ArrayNode?
+        val elements = iterateOverMap[ELEMENTS_FIELD] as? ArrayNode
         val globalArgs = context.globalArgs
         blockArgValues?.let { bindVars("", blockArgs, it) }
         bindVars(currentPath, blockArgs, globalArgs)

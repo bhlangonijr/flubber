@@ -84,7 +84,8 @@ class Context private constructor(
 
     val globalArgs: ObjectNode
         get() = data.withObject("/$GLOBAL_FIELD")
-            .get(GLOBAL_ARGS_FIELD) as ObjectNode
+            .get(GLOBAL_ARGS_FIELD) as? ObjectNode
+            ?: throw IllegalStateException("Global args is not an ObjectNode or is missing")
 
     val state: ObjectNode
         get() = data.withObject("/$STATE_FIELD")
@@ -134,12 +135,13 @@ class Context private constructor(
         mutex.withLock {
             state.put(threadId, executionState.name)
         }
+        // Listeners invoked outside the lock intentionally to avoid holding the mutex during callbacks.
         if (threadId == MAIN_THREAD_ID && executionState == ExecutionState.FINISHED) {
             invokeOnCompleteListeners()
         }
     }
 
-    fun threadStack(threadId: String): ArrayNode = stack.withArray(threadId)
+    private fun threadStack(threadId: String): ArrayNode = stack.withArray(threadId)
 
     suspend fun clearThreadStack(threadId: String) {
         mutex.withLock {
@@ -224,7 +226,11 @@ class Context private constructor(
     fun toJson() = toString()
 
     suspend fun close() {
-
+        mutex.withLock {
+            state.fieldNames().asSequence().toList().forEach { threadId ->
+                state.put(threadId, ExecutionState.FINISHED.name)
+            }
+        }
         data.removeAll()
         unregisterListeners()
     }

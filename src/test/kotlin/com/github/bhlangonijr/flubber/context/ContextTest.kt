@@ -59,7 +59,7 @@ class ContextTest {
         context.push(threadId, StackFrame.create("mainThreadId.main", "main", 0))
         context.push(threadId, StackFrame.create("mainThreadId.main", "main", 1))
 
-        assertEquals(2, context.threadStack(threadId).size())
+        assertEquals(2, context.threadStackSize(threadId))
         assertEquals(1, context.pop(threadId)?.actionIndex)
         assertEquals(0, context.pop(threadId)?.actionIndex)
     }
