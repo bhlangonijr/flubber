@@ -38,6 +38,7 @@ import com.github.bhlangonijr.flubber.util.Util.Companion.makeJson
 import com.github.bhlangonijr.flubber.util.Util.Companion.makeJsonArray
 import com.github.bhlangonijr.flubber.util.Util.Companion.nodeToMap
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
+import java.io.Closeable
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
@@ -50,14 +51,20 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 
 @OptIn(DelicateCoroutinesApi::class)
-class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers.IO) {
+class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers.IO) : Closeable {
 
     private val logger = KotlinLogging.logger {}
     private val processMonitorMap = ConcurrentHashMap<String, Context>()
     @OptIn(ExperimentalCoroutinesApi::class)
     private val dispatcherExecutor = newSingleThreadContext("dispatcher-thread")
+
+    override fun close() {
+        @OptIn(ExperimentalCoroutinesApi::class)
+        dispatcherExecutor.close()
+    }
 
     suspend fun run(context: () -> Context): Context = run(context.invoke())
 
@@ -125,7 +132,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
     private suspend fun dispatchToEventLoop(
         context: Context,
         runSequentially: suspend () -> Any? = {}
-    ) = coroutineScope {
+    ): Unit = coroutineScope {
 
         val result = withContext(dispatcherExecutor) {
             runSequentially.invoke()
@@ -138,11 +145,29 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
         }
         if (result) {
             launch(workerDispatcher) {
-                try {
-                    logger.info { "Running: ${context.id}" }
-                    runMainEventLoop(context)
-                } finally {
-                    processMonitorMap.remove(context.id)
+                var shouldRun = true
+                while (shouldRun) {
+                    try {
+                        logger.info { "Running: ${context.id}" }
+                        runMainEventLoop(context)
+                    } finally {
+                        // Atomically remove from map and check if context became
+                        // runnable again (e.g. a callback/hook arrived while loop was exiting).
+                        shouldRun = try {
+                            withContext(dispatcherExecutor) {
+                                processMonitorMap.remove(context.id)
+                                val stillRunning = context.isRunning()
+                                if (stillRunning) {
+                                    processMonitorMap[context.id] = context
+                                }
+                                stillRunning
+                            }
+                        } catch (e: Exception) {
+                            logger.warn(e) { "Error during event loop cleanup for context ${context.id}" }
+                            processMonitorMap.remove(context.id)
+                            false
+                        }
+                    }
                 }
             }
         }
@@ -150,17 +175,22 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
 
     private suspend fun runMainEventLoop(context: Context) = coroutineScope {
 
-        while (context.running) {
+        while (context.isRunning()) {
             logger.trace { "Main event loop threads: ${context.state.toPrettyString()}" }
             val runningThreads = mutableListOf<Deferred<Long>>()
-            val threads = context.state.fieldNames()
-            threads.forEachRemaining { threadId ->
-                if (context.running(threadId)) {
+            val threadIds = context.state.fieldNames().asSequence().toList()
+            for (threadId in threadIds) {
+                if (context.isRunning(threadId)) {
                     val deferred = async {
                         runThreadLoop(context, threadId)
                     }
                     runningThreads.add(deferred)
                 }
+            }
+            if (runningThreads.isEmpty()) {
+                // No threads were running this iteration; yield to avoid busy-spinning
+                // when threads are transitioning states.
+                yield()
             }
             val iterationTime = runningThreads.sumOf { it.await() }
             logger.debug { "Iteration time: $iterationTime for ${context.state.toPrettyString()}" }
@@ -171,7 +201,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
 
         val init = System.currentTimeMillis()
         var exceptionThrown = false
-        while (context.running(threadId)) {
+        while (context.isRunning(threadId)) {
             try {
                 val executeStep = withContext(dispatcherExecutor) {
                     val childThreads = getRunningChildThreads(context, threadId)
@@ -195,7 +225,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
                             context.setThreadState(threadId, ExecutionState.FINISHED)
                         } else {
                             exceptionThrown = true
-                            context.threadStack(threadId).removeAll()
+                            context.clearThreadStack(threadId)
                             processDoElseBlock(
                                 action,
                                 true,
@@ -233,15 +263,16 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
             val parentThreadFieldId = "$threadId$PARENT_THREAD_FIELD"
             val parent = context.getVariable(parentThreadFieldId)?.asText()
             parent?.let { parentThread ->
+                val threadState = context.threadStateValue(threadId)
                 logger.trace {
-                    "[$threadId] State: ${context.threadStateValue(threadId)}, " +
+                    "[$threadId] State: $threadState, " +
                             "parent: $parentThread$CHILD_THREADS_FIELD"
                 }
                 val childThreadsFieldId = "$parentThread$CHILD_THREADS_FIELD"
                 val childThreads = context.getVariable(childThreadsFieldId)
                 childThreads?.let { child ->
                     logger.trace { "Child: ${child.toPrettyString()}" }
-                    (child as ArrayNode).removeAll { it.asText() == threadId }
+                    (child as? ArrayNode)?.removeAll { it.asText() == threadId }
                     if (context.threadStateValue(parentThread) == ExecutionState.WAITING) {
                         context.setThreadState(parentThread, ExecutionState.RUNNING)
                         logger.trace { "Waking up thread: $threadId" }
@@ -452,7 +483,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
 
         val actionArgs = action.get(GLOBAL_ARGS_FIELD) ?: action
         val block = when {
-            context.threadStack(threadId).size() > MAX_STACK_SIZE ->
+            context.threadStackSize(threadId) > MAX_STACK_SIZE ->
                 throw ScriptStackOverflowException("Script stack overflow")
             result && actionArgs.hasNonNull(DO_FIELD_NAME) -> actionArgs.get(DO_FIELD_NAME)
             !result && actionArgs.hasNonNull(ELSE_FIELD_NAME) -> actionArgs.get(ELSE_FIELD_NAME)
@@ -462,7 +493,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
         val currentPath = path ?: "$threadId-"
         val nextSequence = "$currentPath$sequenceId-"
         val blockArgs = nodeToMap(block.get(GLOBAL_ARGS_FIELD) ?: EMPTY_OBJECT)
-        val elements = iterateOverMap[ELEMENTS_FIELD] as ArrayNode?
+        val elements = iterateOverMap[ELEMENTS_FIELD] as? ArrayNode
         val globalArgs = context.globalArgs
         blockArgValues?.let { bindVars("", blockArgs, it) }
         bindVars(currentPath, blockArgs, globalArgs)

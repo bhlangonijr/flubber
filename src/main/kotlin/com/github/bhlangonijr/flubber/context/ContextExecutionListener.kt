@@ -1,7 +1,9 @@
 package com.github.bhlangonijr.flubber.context
 
 import com.fasterxml.jackson.databind.JsonNode
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.coroutineScope
+import mu.KotlinLogging
 
 typealias ActionEvent = suspend (node: JsonNode, args: MutableMap<String, Any?>, result: Any?) -> Unit
 typealias BeforeActionEvent = suspend (node: JsonNode, args: MutableMap<String, Any?>) -> Unit
@@ -9,11 +11,12 @@ typealias StateEvent = suspend (threadId: String, state: ExecutionState) -> Unit
 
 open class ContextExecutionListener {
 
-    private val actionListeners: MutableList<ActionEvent> = mutableListOf()
-    private val beforeActionListeners: MutableList<BeforeActionEvent> = mutableListOf()
-    private val stateListeners: MutableList<StateEvent> = mutableListOf()
-    private val onCompleteListeners: MutableList<suspend () -> Unit> = mutableListOf()
-    private val exceptionListeners: MutableList<suspend (e: Throwable) -> Unit> = mutableListOf()
+    private val logger = KotlinLogging.logger {}
+    private val actionListeners: MutableList<ActionEvent> = CopyOnWriteArrayList()
+    private val beforeActionListeners: MutableList<BeforeActionEvent> = CopyOnWriteArrayList()
+    private val stateListeners: MutableList<StateEvent> = CopyOnWriteArrayList()
+    private val onCompleteListeners: MutableList<suspend () -> Unit> = CopyOnWriteArrayList()
+    private val exceptionListeners: MutableList<suspend (e: Throwable) -> Unit> = CopyOnWriteArrayList()
 
     suspend fun onAction(
         action: suspend (
@@ -58,27 +61,47 @@ open class ContextExecutionListener {
 
     suspend fun invokeActionListeners(node: JsonNode, args: MutableMap<String, Any?>, result: Any?) = coroutineScope {
 
-        actionListeners.forEach { it.invoke(node, args, result) }
+        actionListeners.forEach {
+            try { it.invoke(node, args, result) } catch (e: Exception) {
+                logger.warn(e) { "Action listener threw exception" }
+            }
+        }
     }
 
     suspend fun invokeBeforeActionListeners(node: JsonNode, args: MutableMap<String, Any?>) = coroutineScope {
 
-        beforeActionListeners.forEach { it.invoke(node, args) }
+        beforeActionListeners.forEach {
+            try { it.invoke(node, args) } catch (e: Exception) {
+                logger.warn(e) { "Before-action listener threw exception" }
+            }
+        }
     }
 
     suspend fun invokeStateListeners(threadId: String, state: ExecutionState) = coroutineScope {
 
-        stateListeners.forEach { it.invoke(threadId, state) }
+        stateListeners.forEach {
+            try { it.invoke(threadId, state) } catch (e: Exception) {
+                logger.warn(e) { "State listener threw exception" }
+            }
+        }
     }
 
     suspend fun invokeExceptionListeners(e: Throwable) = coroutineScope {
 
-        exceptionListeners.forEach { it.invoke(e) }
+        exceptionListeners.forEach {
+            try { it.invoke(e) } catch (listenerException: Exception) {
+                logger.warn(listenerException) { "Exception listener threw exception" }
+            }
+        }
     }
 
     suspend fun invokeOnCompleteListeners() = coroutineScope {
 
-        onCompleteListeners.forEach { it.invoke() }
+        onCompleteListeners.forEach {
+            try { it.invoke() } catch (e: Exception) {
+                logger.warn(e) { "OnComplete listener threw exception" }
+            }
+        }
     }
 
     suspend fun unregisterActionListeners() = coroutineScope {
