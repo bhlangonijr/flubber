@@ -12,13 +12,13 @@ import org.junit.jupiter.api.Test
 class ContextTest {
 
     @Test
-    fun `test context creation`() {
+    fun `test context creation`() = runBlocking {
 
-        val args = """ 
+        val args = """
         {
           "session": {
-            "user": "ben-hur"      
-          } 
+            "user": "ben-hur"
+          }
         }
         """.trimIndent()
 
@@ -31,7 +31,7 @@ class ContextTest {
     }
 
     @Test
-    fun `test context loading`() {
+    fun `test context loading`() = runBlocking {
 
         val context = Context.load(loadResource("/context-sample.json"))
         val script = context.script

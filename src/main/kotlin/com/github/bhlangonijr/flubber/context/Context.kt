@@ -92,10 +92,11 @@ class Context private constructor(
     val stack: ObjectNode
         get() = data.withObject("/$STACK_FIELD")
 
-    val running: Boolean
-        get() = state.fieldNames()
+    suspend fun isRunning(): Boolean = mutex.withLock {
+        state.fieldNames()
             .asSequence()
-            .any { running(it) }
+            .any { isRunningUnsafe(it) }
+    }
 
     suspend fun setVariable(path: String, value: JsonNode) {
         mutex.withLock {
@@ -109,14 +110,24 @@ class Context private constructor(
         }
     }
 
-    fun getVariable(path: String): JsonNode? =
+    suspend fun getVariable(path: String): JsonNode? = mutex.withLock {
         globalArgs.get(path)
+    }
 
-    fun running(threadId: String): Boolean =
-        threadStateValue(threadId) == ExecutionState.RUNNING
-                || threadStateValue(threadId) == ExecutionState.NEW
+    suspend fun isRunning(threadId: String): Boolean = mutex.withLock {
+        isRunningUnsafe(threadId)
+    }
 
-    fun threadStateValue(threadId: String): ExecutionState =
+    private fun isRunningUnsafe(threadId: String): Boolean {
+        val stateValue = threadStateValueUnsafe(threadId)
+        return stateValue == ExecutionState.RUNNING || stateValue == ExecutionState.NEW
+    }
+
+    suspend fun threadStateValue(threadId: String): ExecutionState = mutex.withLock {
+        threadStateValueUnsafe(threadId)
+    }
+
+    private fun threadStateValueUnsafe(threadId: String): ExecutionState =
         ExecutionState.valueOf(state.get(threadId).asText())
 
     suspend fun setThreadState(threadId: String, executionState: ExecutionState) {
@@ -129,6 +140,16 @@ class Context private constructor(
     }
 
     fun threadStack(threadId: String): ArrayNode = stack.withArray(threadId)
+
+    suspend fun clearThreadStack(threadId: String) {
+        mutex.withLock {
+            threadStack(threadId).removeAll()
+        }
+    }
+
+    suspend fun threadStackSize(threadId: String): Int = mutex.withLock {
+        threadStack(threadId).size()
+    }
 
     suspend fun next(threadId: String = MAIN_THREAD_ID): FramePointer? = coroutineScope {
         when (threadStateValue(threadId)) {
@@ -147,7 +168,7 @@ class Context private constructor(
                         frame.sequenceType ->
                             FramePointer(EMPTY_OBJECT, frame.sequence, nextActionIndex, true, frame)
                         nextActionIndex < sequence.size() -> getAction(frame, nextActionIndex)
-                        threadStack(threadId).isEmpty.not() -> null //next(threadId)
+                        threadStackSize(threadId) > 0 -> null //next(threadId)
                         else -> {
                             setThreadState(threadId, ExecutionState.FINISHED)
                             null
@@ -184,8 +205,7 @@ class Context private constructor(
             }
     }
 
-    suspend fun current(threadId: String): StackFrame? = coroutineScope {
-
+    suspend fun current(threadId: String): StackFrame? = mutex.withLock {
         val stack = threadStack(threadId)
         if (stack.isEmpty) {
             null
