@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.github.bhlangonijr"
-version = "0.6.3"
+version = "0.7.0"
 
 repositories {
     mavenCentral()
@@ -22,6 +22,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.10")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.2")
     implementation("org.python:jython:2.7.3b1")
     implementation("org.graalvm.js:js-scriptengine:24.1.2")
     implementation("org.graalvm.polyglot:js:24.1.2") {
