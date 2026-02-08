@@ -1,4 +1,4 @@
-**Flubber**: A Lightweight Workflow Engine for JSON DSL Script Execution
+**Flubber**: A Lightweight Workflow Engine for JSON/YAML DSL Script Execution
 
 [![](https://jitpack.io/v/bhlangonijr/flubber.svg)](https://jitpack.io/#bhlangonijr/flubber)
 
@@ -11,6 +11,8 @@ Flubber is a versatile Kotlin-based library designed for constructing workflows 
 - **Workflow Orchestration:** Flubber empowers you to orchestrate complex workflows, streamlining tasks, and automating processes within your application or system.
 
 - **Kotlin and Java Compatibility:** Whether you're working with Kotlin or Java, Flubber offers compatibility with both programming languages, giving you the flexibility to choose your preferred environment.
+
+- **JSON and YAML Support:** Scripts can be written in either JSON or YAML format. YAML offers improved readability for complex workflows. The format is detected automatically — no configuration needed.
 
 - **Extensible and Lightweight:** Flubber is designed with extensibility in mind, allowing you to build on top of its core functionality to cater to your specific use cases. It is lightweight and easy to integrate into your projects.
 
@@ -50,7 +52,7 @@ Flubber dependency can be added via the jitpack repository.
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
-    <version>0.6.3</version>
+    <version>0.7.0</version>
 </dependency>
 ```
 
@@ -66,7 +68,7 @@ repositories {
 ```
 dependencies {
     ...
-    implementation 'com.github.bhlangonijr:flubber:0.6.3'
+    implementation 'com.github.bhlangonijr:flubber:0.7.0'
     ...
 }
 ```
@@ -85,7 +87,11 @@ var action = function(context, args) {
 
 ## Scripting a Hello World DSL
 
-To demonstrate the usage of this language, let's create a simple "Hello World" script. This script writes a welcome message to the console using a custom action named `hello`, which is imported into the script. The `hello` action is fetched from the specified URL:
+To demonstrate the usage of this language, let's create a simple "Hello World" script. This script writes a welcome message to the console using a custom action named `hello`, which is imported into the script. The `hello` action is fetched from the specified URL.
+
+Scripts can be written in JSON or YAML — the format is auto-detected when loading.
+
+### JSON
 ```json
 {
   "import": [
@@ -109,7 +115,21 @@ To demonstrate the usage of this language, let's create a simple "Hello World" s
     }
   ]
 }
-```  
+```
+
+### YAML
+```yaml
+import:
+  - action: "hello"
+    url: "https://localhost:8080/myserver/hello.js"
+_comment: "sample hello world script"
+flow:
+  - id: "main"
+    sequence:
+      - action: "hello"
+        args:
+          user: "{{session.user}}"
+```
 
 ## Running the script
 

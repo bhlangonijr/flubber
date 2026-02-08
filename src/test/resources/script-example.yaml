@@ -1,0 +1,73 @@
+id: "simple-call-flow"
+author:
+  name: "Ben-Hur"
+  e-mail: "bhlangonijr@gmail.com"
+_comment: "sample script of a call flow scenario"
+flow:
+  - id: "main"
+    sequence:
+      - id: "initial.answer"
+        action: "answer"
+        args:
+          setGlobal: "hello {{session.user}}, press 1000 to greet or 2000 to quit."
+      - action: "say"
+        args:
+          text: "hello {{session.user}}, press 1000 to greet or 2000 to quit."
+      - action: "waitOnDigits"
+        args:
+          length: 4
+          timeout: 10
+          set: "DIGITS"
+      - decision: "expression"
+        args:
+          condition: "{{DIGITS}} == '1000'"
+          do:
+            sequence: "greetAndExit"
+            args:
+              HANGUP_CODE: "normal"
+          else:
+            sequence: "exit"
+            args:
+              HANGUP_CODE: "normal"
+      - action: "say"
+        args:
+          text: "bye {{session.user}}, returned from decision"
+  - id: "exitWithError"
+    sequence:
+      - action: "say"
+        args:
+          text: "not your day {{session.user}}: {{ERROR}}"
+      - action: "hangup"
+        args:
+          reference: "initial.answer"
+      - action: "exit"
+  - id: "exit"
+    sequence:
+      - action: "say"
+        args:
+          text: "exited {{session.user}} with {{HANGUP_CODE}}"
+      - action: "hangup"
+        args:
+          reference: "initial.answer"
+      - action: "exit"
+  - id: "greetAndExit"
+    sequence:
+      - action: "say"
+        args:
+          text: "have a good one {{session.user}}"
+      - action: "hangup"
+        args:
+          reference: "initial.answer"
+hooks:
+  - event: "hangup"
+    do:
+      sequence: "exit"
+      args:
+        HANGUP_CODE: "{{code}}"
+exceptionally:
+  action: "run"
+  args:
+    do:
+      sequence: "exitWithError"
+      args:
+        ERROR: "{{exception.message}}"

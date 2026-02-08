@@ -3,6 +3,7 @@ package com.github.bhlangonijr.flubber.script
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.github.bhlangonijr.flubber.action.*
 import com.github.bhlangonijr.flubber.context.Context
@@ -42,6 +43,7 @@ class Script private constructor(
         const val PARALLEL_FIELD_NAME = "isParallel"
 
         private val mapper = ObjectMapper().registerKotlinModule()
+        private val yamlMapper = ObjectMapper(YAMLFactory()).registerKotlinModule()
 
         fun from(source: URL): Script {
 
@@ -58,7 +60,9 @@ class Script private constructor(
 
         fun from(script: String): Script {
 
-            val scriptJson = mapper.readTree(script)
+            val trimmed = script.trimStart()
+            val selectedMapper = if (trimmed.startsWith("{") || trimmed.startsWith("[")) mapper else yamlMapper
+            val scriptJson = selectedMapper.readTree(script)
             return from(scriptJson)
         }
 

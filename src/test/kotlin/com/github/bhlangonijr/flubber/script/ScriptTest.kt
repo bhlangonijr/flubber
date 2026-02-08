@@ -15,4 +15,14 @@ class ScriptTest {
         assertEquals(2, script.sequence("greetAndExit")?.size())
         assertEquals("hangup", script.action("greetAndExit", 1)?.get("action")?.asText())
     }
+
+    @Test
+    fun `test yaml script loading`() {
+
+        val script = Script.from(loadResource("/script-example.yaml"))
+
+        assertEquals(4, script.flow()?.size())
+        assertEquals(2, script.sequence("greetAndExit")?.size())
+        assertEquals("hangup", script.action("greetAndExit", 1)?.get("action")?.asText())
+    }
 }
