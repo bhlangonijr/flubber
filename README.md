@@ -40,7 +40,7 @@ Add the repository and dependency to `pom.xml`:
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
-    <version>0.7.0</version>
+    <version>0.7.1</version>
 </dependency>
 
 ```
@@ -55,7 +55,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.bhlangonijr:flubber:0.7.0'
+    implementation 'com.github.bhlangonijr:flubber:0.7.1'
 }
 
 ```
