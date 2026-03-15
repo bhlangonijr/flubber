@@ -21,9 +21,13 @@ class RestAction : Action {
 
     companion object {
         private val objectMapper = ObjectMapper().registerKotlinModule()
-        private val sslContext = customSslContext()
+        private val insecureSsl = System.getProperty(
+            "rest.ssl.insecure",
+            System.getenv("rest.ssl.insecure") ?: "true"
+        ).toBoolean()
+        private val sslContext = if (insecureSsl) insecureSslContext() else SSLContext.getDefault()
 
-        private fun customSslContext(): SSLContext {
+        private fun insecureSslContext(): SSLContext {
             val sslContext: SSLContext = SSLContext.getInstance("SSL")
             sslContext.init(null, arrayOf<TrustManager>(CustomTrustManager()), SecureRandom())
             return sslContext
@@ -57,7 +61,9 @@ class RestAction : Action {
         contentType: String? = "application/json"
     ): HttpResponse<String> {
 
-        val client: HttpClient = HttpClient.newBuilder().sslContext(sslContext).build()
+        val builder = HttpClient.newBuilder()
+        if (insecureSsl) builder.sslContext(sslContext)
+        val client: HttpClient = builder.build()
         val requestBuilder = HttpRequest.newBuilder(URI(url))
             .header("Accept", contentType)
         headers?.forEach { requestBuilder.setHeader(it.key, it.value) }

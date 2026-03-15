@@ -1,93 +1,83 @@
-**Flubber**: A Lightweight Workflow Engine for JSON/YAML DSL Script Execution
+# Flubber: Lightweight Workflow Engine for JSON/YAML DSL Execution
 
-[![](https://jitpack.io/v/bhlangonijr/flubber.svg)](https://jitpack.io/#bhlangonijr/flubber)
+**Flubber** is a versatile Kotlin-based library designed for constructing workflows and automation tasks using custom Domain-Specific Languages (DSLs). Its primary purpose is to empower developers to create tailored automation solutions, such as chatbot logic, ETL pipelines, or business process orchestrators, by decoupling logic from implementation.
 
-Flubber is a versatile Kotlin-based library designed for constructing workflows and automation tasks using custom [domain-specific languages (DSLs)](https://en.wikipedia.org/wiki/Domain-specific_language). Its primary purpose is to empower developers to create tailored automation solutions, such as chatbot DSLs, uniquely suited for specific business needs.
+## Key Features
 
-**Key Features:**
+* **DSL Development:** Facilitates the creation of domain-specific languages by enabling the definition of customized actions. These actions can be leveraged to interact with internal messaging systems or external APIs.
+* **Workflow Orchestration:** Orchestrates complex workflows, streamlines tasks, and automates processes within an application or distributed system.
+* **Kotlin and Java Compatibility:** Offers full interoperability with both Kotlin and Java, providing flexibility for JVM-based environments.
+* **Dual Format Support:** Scripts can be written in either JSON or YAML format. The engine automatically detects the format, with YAML offering improved readability for complex configuration files.
+* **Extensible Architecture:** Designed for extensibility, allowing developers to build upon core functionality to satisfy specific business requirements.
 
-- **DSL Development:** Flubber facilitates the creation of domain-specific languages by enabling you to define customized actions. These actions can be leveraged to interact with your business's internal messaging system, allowing you to send and receive messages seamlessly.
+## Installation
 
-- **Workflow Orchestration:** Flubber empowers you to orchestrate complex workflows, streamlining tasks, and automating processes within your application or system.
+### From Source
 
-- **Kotlin and Java Compatibility:** Whether you're working with Kotlin or Java, Flubber offers compatibility with both programming languages, giving you the flexibility to choose your preferred environment.
-
-- **JSON and YAML Support:** Scripts can be written in either JSON or YAML format. YAML offers improved readability for complex workflows. The format is detected automatically — no configuration needed.
-
-- **Extensible and Lightweight:** Flubber is designed with extensibility in mind, allowing you to build on top of its core functionality to cater to your specific use cases. It is lightweight and easy to integrate into your projects.
-
-If you're looking for a practical way to build custom languages and streamline workflows, Flubber is a handy library to explore.
-
-Feel free to dive into Flubber today to simplify automation and tailor it to your business needs!
-
-# Building/Installing
-
-## From source
+```bash
+git clone git@github.com:bhlangonijr/flubber.git
+cd flubber/
+mvn clean compile package install
 
 ```
-$ git clone git@github.com:bhlangonijr/flubber.git
-$ cd flubber/
-$ mvn clean compile package install
-```
 
-## From repo
+### Dependency Management
 
-Flubber dependency can be added via the jitpack repository.
+Flubber is available via the JitPack repository.
 
-## Maven
+#### Maven
+
+Add the repository and dependency to `pom.xml`:
 
 ```xml
-
 <repositories>
-    ...
     <repository>
         <id>jitpack.io</id>
         <url>https://jitpack.io</url>
     </repository>
 </repositories>
-```
-
-```xml
 
 <dependency>
     <groupId>com.github.bhlangonijr</groupId>
     <artifactId>flubber</artifactId>
     <version>0.7.0</version>
 </dependency>
-```
-
-## Gradle
 
 ```
+
+#### Gradle
+
+Add to `build.gradle`:
+
+```kotlin
 repositories {
-    ...
     maven { url 'https://jitpack.io' }
 }
-```
 
-```
 dependencies {
-    ...
     implementation 'com.github.bhlangonijr:flubber:0.7.0'
-    ...
 }
+
 ```
 
-# Usage
+## Usage Principles
 
-In this scripting language, the fundamental building blocks of any script are referred to as "actions." These actions are encapsulated within external JavaScript or Python files, each containing a function that accepts two arguments: context and args. These actions can be hosted on any web server as dynamic or static content or can be stored as local files. For example:
+The fundamental building blocks of any script in Flubber are "actions." Actions are encapsulated logic units (often external JavaScript or Python scripts) that accept a `context` and `args`. These can be hosted on a web server or stored locally.
+
+**Example Action Definition (JavaScript):**
 
 ```javascript
-// hello action. Served by URL: https://localhost:8080/myserver/hello.js
+// hello.js - Served by URL: https://localhost:8080/myserver/hello.js
 var action = function(context, args) {
     console.log("HELLO: " + args.user);
     return "ok";
 }
-```  
 
-## Scripting a Hello World DSL
+```
 
-To demonstrate the usage of this language, let's create a simple "Hello World" script. This script writes a welcome message to the console using a custom action named `hello`, which is imported into the script. The `hello` action is fetched from the specified URL.
+### Scripting a Hello World DSL
+
+The following example demonstrates a script that imports a custom `hello` action and executes it within a sequence.
 
 Scripts can be written in JSON or YAML — the format is auto-detected when loading.
 
@@ -131,228 +121,158 @@ flow:
           user: "{{session.user}}"
 ```
 
-## Running the script
+### Executing the Script
 
 ```kotlin
-val args = 
-    """
-        {
-          "session":{
-          "user":"john"
-          }
-        }
-    """
+val args = """
+    {
+      "session": {
+        "user":"john"
+      }
+    }
+"""
 
-Script
-    .from(script)
+Script.from(script)
     .with(args)
     .apply {
-        this.onException { e -> println("Oops ${e.message}") }        
+        this.onException { e -> println("Error: ${e.message}") }        
     }
     .run()
+
 ```
 
-## Built-in actions
+## Built-in Actions
 
-Some out-of-box actions are available for building basic flows:
+Flubber includes several core actions to facilitate standard workflow logic.
 
-## expression
+### Expression
 
-Evaluates a logic expression for conditionally executing sequences.
+Evaluates logic expressions for conditional branching or variable assignment. It supports standard JavaScript syntax.
+
+<details>
+<summary><strong>JSON Configuration</strong></summary>
 
 ```json
-
 {
   "decision": "expression",
   "args": {
     "condition": "{{DIGITS}} == '1000'",
     "do": {
       "sequence": "greetAndExit",
-      "args": {
-        "HANGUP_CODE": "normal"
-      }
+      "args": { "HANGUP_CODE": "normal" }
     },
     "else": {
       "sequence": "exit",
-      "args": {
-        "HANGUP_CODE": "normal"
-      }
+      "args": { "HANGUP_CODE": "normal" }
     }
   }
 }
+
 ```
 
-Alternatively, it can be used to evaluate arbitrary javascript statements.
+</details>
 
-```json
+<details>
+<summary><strong>YAML Configuration</strong></summary>
 
-{
-  "action": "expression",
-  "args": {
-    "text": "\"{{DIGITS}}\".substring(0, 4)",
-    "set": "firstDigits"
-  }
-}
+```yaml
+decision: expression
+args:
+  condition: "{{DIGITS}} == '1000'"
+  do:
+    sequence: greetAndExit
+    args:
+      HANGUP_CODE: normal
+  else:
+    sequence: exit
+    args:
+      HANGUP_CODE: normal
+
 ```
 
-The attribute `set` instructs the engine to store the result of the expression in the variable `firstDigits`.
+</details>
 
-## exit
+### REST
 
-Halts execution of a script.
+Executes HTTP requests. Supported methods include `post`, `put`, `get`, and `delete`. The response (status, headers, body) is stored in the variable defined by the `set` argument.
 
-```json
-
-{
-  "action": "exit"
-}
-```
-
-## run
-
-Executes a sequence, returning to the calling sequence after finished.
+<details>
+<summary><strong>JSON Configuration</strong></summary>
 
 ```json
-
-{
-  "action": "run",
-  "args": {
-    "do": {
-      "sequence": "greet",
-      "args": {
-        "greet_type": "normal"
-      }
-    }
-  }
-}
-```
-
-## rest
-
-Call a REST/HTTP endpoint using specified params. Available methods: `post`, `put`, `get`, `delete`.
-
-```json
-
 {
   "action": "rest",
   "args": {
     "url": "https://exampleserver/api/user",
     "method": "post",
     "body": "{\"name\": \"{{session.user}}\"}",
-    "headers": "{\"Content-Type\": \"application/json\", \"Accept\": \"*/*\"}",
-    "set": "httResponse"
+    "headers": "{\"Content-Type\": \"application/json\"}",
+    "set": "httpResponse"
   }
 }
+
 ```
 
-The response object contains a HTTP `status` code, `headers` and an optional `body`, e.g.,
+</details>
 
-```json
+<details>
+<summary><strong>YAML Configuration</strong></summary>
 
-{
-  "status": "200",
-  "body": {
-    "result": "OK"
-  },
-  "headers": {
-    "content-length": 20,
-    "content-type": "application/json; charset=utf-8"
-  }
-}
+```yaml
+action: rest
+args:
+  url: "https://exampleserver/api/user"
+  method: post
+  body: '{"name": "{{session.user}}"}'
+  headers: '{"Content-Type": "application/json"}'
+  set: httpResponse
+
 ```
 
-## json
+</details>
 
-The `json` action aids parsing json strings into structured objects so that it can be easily manipulated by other
-actions as when you want to extract certain attribute values.
+### JSON & Jolt Transformation
 
-In the example below `body` from the `httpResponse` has been parsed as a JSON object and result set to `userProfile`:
+Parses JSON strings into structured objects for manipulation. It also supports [Jolt](https://github.com/bazaarvoice/jolt) specifications for complex JSON-to-JSON transformations.
+
+<details>
+<summary><strong>JSON Configuration</strong></summary>
 
 ```json
-
 {
   "action": "json",
   "args": {
-    "text": "{{httResponse.body}}",
+    "text": "{\"users\":[{\"username\":\"john\"}]}",
+    "spec": "[{\"operation\": \"shift\",\"spec\":{\"users\": {\"*\": {\"username\": \"usernames\"}}}}]",
     "set": "userProfile"
   }
 }
-```
-
-The field values can be resolved using mustaches further on `{{userProfile.name}}` and accessed through the
-use of Json Pointer [specification](https://www.rfc-editor.org/rfc/rfc6901).
-
-### json specs
-
-JSON to JSON transformation is possible by specifying [jolt specs](https://github.com/bazaarvoice/jolt).
-
-```json
-
-{
-  "action": "json",
-  "args": {
-    "text": "{\"users\":[{\"username\":\"john\"},{\"username\":\"mary\"},{\"username\":\"alice\"}]}",
-    "spec": "[{\"operation\": \"shift\",\"spec\":\"users\": {\"*\": {\"username\": \"usernames\"}}}}]",
-    "set": "userProfile"
-  }
-}
-```
-
-input json:
-
-```json
-{
-  "users": [
-    {
-      "username": "john"
-    },
-    {
-      "username": "mary"
-    },
-    {
-      "username": "alice"
-    }
-  ]
-}
 
 ```
 
-output json by using the transformation spec:
+</details>
 
-```json
-{
-  "usernames": [
-    "john",
-    "mary",
-    "alice"
-  ]
-}
+<details>
+<summary><strong>YAML Configuration</strong></summary>
+
+```yaml
+action: json
+args:
+  text: '{"users":[{"username":"john"}]}'
+  spec: '[{"operation": "shift","spec":{"users": {"*": {"username": "usernames"}}}}]'
+  set: userProfile
+
 ```
 
-## forEach
+</details>
 
-Iterates over a JSON array by calling a specified sequence for each of its elements.
+### ForEach
 
-```json
-{
-  "action": "forEach",
-  "args": {
-    "iterateOver": "object.users",
-    "setElement": "forEachElement",
-    "do": {
-      "sequence": "greet"
-    }
-  }
-}
-```
+Iterates over a JSON array, executing a specific sequence for each element.
+**Parallel Execution:** Set `isParallel` to `true` to process elements concurrently. Results can be aggregated back into a parent variable.
 
-### Iteration parallelism
-
-To execute iteration in parallel for each input array element, set the `isParallel` property to `true` 
-and use the `forEach` action. If the child sequence sets a local variable with the same name as the 
-parent variable `forEach`'s action it will collect and aggregate all child values in the 
-parent array variable.  
-
+<details>
+<summary><strong>JSON Configuration</strong></summary>
 
 ```json
 {
@@ -367,38 +287,37 @@ parent array variable.
     }
   }
 }
+
 ```
 
-Example:
+</details>
+
+<details>
+<summary><strong>YAML Configuration</strong></summary>
+
+```yaml
+action: forEach
+args:
+  iterateOver: object.users
+  setElement: forEachElement
+  isParallel: true
+  set: forEachResult
+  do:
+    sequence: greet
+
+```
+
+</details>
+
+### Menu
+
+Routes execution to specific sequences based on user input or variable matching. Useful for chatbot decision trees.
+
+<details>
+<summary><strong>JSON Configuration</strong></summary>
 
 ```json
-
 {
-  "id": "greet",
-  "sequence": [
-    {
-      "action": "expression",
-      "args": {
-        "text": "Hello {{username}}",
-        "set": "forEachResult"
-      }
-    }
-  ]
-}
-```
-
-Variable `forEachResult` declared in the local scope of parent sequence containing `forEach` will be set to:
-
-```json
-["Hello john", "Hello mary", "Hello alice"]
-```
-
-## menu
-
-Run a specific sequence based on the option selected by the user.
-
-```json
-        {
   "action": "menu",
   "args": {
     "text": "{{option}}",
@@ -406,55 +325,157 @@ Run a specific sequence based on the option selected by the user.
       {
         "code": "1",
         "similar": ["greet", "say hi"],
-        "do": {
-          "sequence": "hello",
-          "args": {
-            "username": "{{username}}"
-          }
-        }
+        "do": { "sequence": "hello" }
       },
       {
         "code": "2",
-        "similar": ["bye", "say goodbye"],
-        "do": {
-          "sequence": "exit",
-          "args": {
-            "username": "{{username}}"
-          }
-        }
+        "do": { "sequence": "exit" }
       }
     ],
     "else": {
-      "sequence": "none",
-      "args": {
-        "username": "none selected"
-      }
+      "sequence": "none"
     }
   }
 }
+
 ```
 
-## Handling exceptions
+</details>
 
-Exceptions can be caught and handled by adding the `exceptionally` object and calling a custom sequence with the
-`run` action.
+<details>
+<summary><strong>YAML Configuration</strong></summary>
+
+```yaml
+action: menu
+args:
+  text: "{{option}}"
+  options:
+    - code: "1"
+      similar: ["greet", "say hi"]
+      do:
+        sequence: hello
+    - code: "2"
+      do:
+        sequence: exit
+  else:
+    sequence: none
+
+```
+
+</details>
+
+### Run & Exit
+
+`run` executes a nested sequence and returns to the caller upon completion. `exit` halts the script execution immediately.
+
+<details>
+<summary><strong>JSON Configuration</strong></summary>
 
 ```json
 {
-  "id": "simple-call-flow",
-  "flow": [
-     
-  ],
+  "action": "run",
+  "args": {
+    "do": {
+      "sequence": "greet",
+      "args": { "type": "normal" }
+    }
+  }
+}
+
+```
+
+</details>
+
+<details>
+<summary><strong>YAML Configuration</strong></summary>
+
+```yaml
+action: run
+args:
+  do:
+    sequence: greet
+    args:
+      type: normal
+
+```
+
+</details>
+
+## Exception Handling
+
+Flubber supports a global exception handling mechanism defined via the `exceptionally` block. This ensures robust workflow execution by catching runtime errors and redirecting to a recovery sequence.
+
+<details>
+<summary><strong>JSON Configuration</strong></summary>
+
+```json
+{
+  "id": "main-flow",
+  "flow": [],
   "exceptionally": {
     "action": "run",
     "args": {
       "do": {
         "sequence": "exitWithError",
-        "args": {
-          "ERROR": "{{exception.message}}"
-        }
+        "args": { "ERROR": "{{exception.message}}" }
       }
     }
   }
 }
+
 ```
+
+</details>
+
+<details>
+<summary><strong>YAML Configuration</strong></summary>
+
+```yaml
+id: main-flow
+flow: []
+exceptionally:
+  action: run
+  args:
+    do:
+      sequence: exitWithError
+      args:
+        ERROR: "{{exception.message}}"
+
+```
+
+</details>
+
+## Configuration
+
+Flubber supports configuration via JVM system properties or environment variables. System properties take precedence over environment variables.
+
+### REST Action SSL
+
+By default, the `rest` action uses an insecure SSL context that accepts all certificates. This is convenient for development but should be disabled in production.
+
+| Property | Default | Description |
+|---|---|---|
+| `rest.ssl.insecure` | `true` | When `true`, accepts all SSL certificates without validation. Set to `false` to use the JVM's default truststore for certificate verification. |
+
+**Example — enable secure SSL:**
+
+```bash
+# Via JVM system property
+java -Drest.ssl.insecure=false -jar myapp.jar
+
+# Via environment variable
+export rest.ssl.insecure=false
+```
+
+### Script Engine
+
+The GraalVM JavaScript engine used by `expression` and `javascript` actions can be tuned with the following properties:
+
+| Property | Default | Description |
+|---|---|---|
+| `script.allowHostAccess` | `true` | Allow scripts to access Java host objects |
+| `script.allowNativeAccess` | `true` | Allow native system access |
+| `script.allowHostClassLookup` | `true` | Allow scripts to look up Java classes |
+| `script.allowExperimentalOptions` | `true` | Allow experimental GraalVM options |
+| `script.allowCreateThread` | `true` | Allow scripts to create threads |
+| `script.js.nashorn-compat` | `true` | Enable Nashorn compatibility mode |
