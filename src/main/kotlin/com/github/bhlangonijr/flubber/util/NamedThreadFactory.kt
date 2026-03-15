@@ -26,8 +26,7 @@ class NamedThreadFactory(prefix: String) : ThreadFactory {
     }
 
     init {
-        val s = System.getSecurityManager()
-        group = if (s != null) s.threadGroup else Thread.currentThread().threadGroup
+        group = Thread.currentThread().threadGroup
         namePrefix = (prefix + "-" + poolNumber.getAndIncrement() + "-thread-")
     }
 }
