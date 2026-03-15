@@ -1,3 +1,5 @@
+
+[![](https://jitpack.io/v/bhlangonijr/flubber.svg)](https://jitpack.io/#bhlangonijr/flubber)
 # Flubber: Lightweight Workflow Engine for JSON/YAML DSL Execution
 
 **Flubber** is a versatile Kotlin-based library designed for constructing workflows and automation tasks using custom Domain-Specific Languages (DSLs). Its primary purpose is to empower developers to create tailored automation solutions, such as chatbot logic, ETL pipelines, or business process orchestrators, by decoupling logic from implementation.
