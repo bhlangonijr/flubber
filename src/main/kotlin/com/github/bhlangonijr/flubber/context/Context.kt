@@ -141,6 +141,20 @@ class Context private constructor(
         }
     }
 
+    suspend fun terminate() {
+        val shouldNotify = mutex.withLock {
+            val mainWasLive = state.has(MAIN_THREAD_ID) &&
+                threadStateValueUnsafe(MAIN_THREAD_ID) != ExecutionState.FINISHED
+            state.fieldNames().asSequence().toList().forEach { threadId ->
+                state.put(threadId, ExecutionState.FINISHED.name)
+            }
+            mainWasLive
+        }
+        if (shouldNotify) {
+            invokeOnCompleteListeners()
+        }
+    }
+
     private fun threadStack(threadId: String): ArrayNode = stack.withArray(threadId)
 
     suspend fun clearThreadStack(threadId: String) {
