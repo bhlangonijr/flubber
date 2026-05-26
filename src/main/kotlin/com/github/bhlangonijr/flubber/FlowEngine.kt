@@ -466,7 +466,7 @@ class FlowEngine(private val workerDispatcher: CoroutineDispatcher = Dispatchers
                     actionPath
                 )
             result is Map<*, *> && result[EXIT_NODE_FIELD_NAME] == true ->
-                context.setThreadState(threadId, ExecutionState.FINISHED)
+                context.terminate()
         }
         context.invokeActionListeners(action, args, result)
     }

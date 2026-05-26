@@ -9,12 +9,14 @@ import com.github.bhlangonijr.flubber.context.Context
 import com.github.bhlangonijr.flubber.context.ExecutionState
 import com.github.bhlangonijr.flubber.script.Script
 import com.github.bhlangonijr.flubber.script.ScriptException
+import com.github.bhlangonijr.flubber.script.ScriptStateException
 import com.github.bhlangonijr.flubber.util.Util.Companion.loadResource
 import com.github.bhlangonijr.flubber.util.Util.Companion.objectToNode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
@@ -317,6 +319,86 @@ class FlowEngineTest {
 
         assertEquals("hello john doe, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
         assertEquals("exited john with external quit", queue.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun `test hook exit terminates entire flow`() = runBlocking {
+
+        val queue = ArrayBlockingQueue<String>(3)
+        val queueRequest = ArrayBlockingQueue<ObjectNode>(2)
+        val callbackErrors = ArrayBlockingQueue<Throwable>(2)
+        val completeLatch = CountDownLatch(1)
+        val engine = FlowEngine()
+
+        val script = Script.from(loadResource("/script-example-async.json"))
+        script.register("answer", JavascriptAction(answerAction))
+        script.register("hangup", JavascriptAction(hangupAction))
+        script.register("say") {
+            object : Action {
+                override fun execute(context: ObjectNode, args: Map<String, Any?>): Any {
+                    queue.offer(args["text"] as String)
+                    return "ok"
+                }
+            }
+        }
+        script.register(
+            "waitOnDigits", JavascriptAction(
+                """
+        var action = function(context, args) {
+            var result = {
+              "callback": true,
+              "threadId": args.threadId
+            }
+            return result;
+        }
+        """.trimIndent()
+            )
+        )
+
+        val context = script.with(args)
+        context.onComplete { completeLatch.countDown() }
+        context.onAction { node, _, result ->
+            if (node["action"]?.asText() == "waitOnDigits") {
+                queueRequest.offer(objectToNode(result!!) as ObjectNode)
+            }
+        }
+        engine.run { context }
+
+        queueRequest.poll(5, TimeUnit.SECONDS)?.let {
+            engine.run(
+                context, Event.from(
+                    """
+                {
+                  "event": "hangup",
+                  "args": {
+                    "code": "external quit"
+                  }
+                }
+            """.trimIndent()
+                )
+            ).onException { e -> e.printStackTrace() }
+        }
+
+        assertEquals("hello john doe, press 1000 to greet or 2000 to quit.", queue.poll(5, TimeUnit.SECONDS))
+        assertEquals("exited john with external quit", queue.poll(5, TimeUnit.SECONDS))
+
+        assertTrue(completeLatch.await(5, TimeUnit.SECONDS), "Flow did not complete after hook exit")
+        assertEquals(ExecutionState.FINISHED, context.threadStateValue(Context.MAIN_THREAD_ID))
+
+        context.onException { e -> callbackErrors.offer(e) }
+        engine.run(
+            context, Callback.from(
+                """
+            {
+              "id": "anything",
+              "threadId": "${Context.MAIN_THREAD_ID}",
+              "result": "1000"
+            }
+        """.trimIndent()
+            )
+        )
+        val callbackError = callbackErrors.poll(5, TimeUnit.SECONDS)
+        assertTrue(callbackError is ScriptStateException, "Expected ScriptStateException, got: $callbackError")
     }
 
     @Test
